@@ -2,7 +2,6 @@
 use rand::seq::SliceRandom;
 use std::fmt;
 
-
 #[derive(Clone, Copy)]
 enum Colour {
     Hearts,
@@ -23,9 +22,7 @@ struct Deck {
 impl Deck {
     fn pull_cards(&mut self, amount: usize) -> Deck {
         let pulled = self.cards.drain(..amount).collect();
-        Deck {
-            cards: pulled,
-        }
+        Deck { cards: pulled }
     }
 
     fn size(&self) -> usize {
@@ -83,9 +80,9 @@ impl fmt::Display for Card {
 impl fmt::Display for Deck {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "[")?;
-        
+
         let mut row_count = 0;
-        
+
         for card in &self.cards {
             if row_count % 4 == 0 {
                 write!(f, "\n")?;
@@ -95,25 +92,30 @@ impl fmt::Display for Deck {
         }
 
         write!(f, "\n], length: {}", self.size())
-
     }
 }
 
 fn full_deck() -> Deck {
     let mut cards: Vec<Card> = Vec::new();
 
-    let colours = [Colour::Hearts, Colour::Clubs, Colour::Diamonds, Colour::Spades];
+    let colours = [
+        Colour::Hearts,
+        Colour::Clubs,
+        Colour::Diamonds,
+        Colour::Spades,
+    ];
 
     for clr in colours {
         for nmb in 1..14 {
-            cards.push(Card { colour: clr, number: nmb });
+            cards.push(Card {
+                colour: clr,
+                number: nmb,
+            });
         }
     }
 
-    Deck {
-        cards
-    }
-}   
+    Deck { cards }
+}
 
 fn main() {
     let mut deck = full_deck();
