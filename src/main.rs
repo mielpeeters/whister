@@ -2,26 +2,37 @@
 This crate implements an AI which plays Colour Whist (nl: Kleurenwiezen).
 */
 
-use whister::playingcards::Deck;
+use whister::{
+    playingcards::Deck, 
+    game::Game
+};
+use rand::{self, Rng};
 
 fn main() {
     let mut deck = Deck::new_full();
+    let mut game = Game::new();
 
-    deck.shuffle();
+    // random shuffle
+    deck.shuffle(); 
 
-    let mut player_one = deck.pull_cards(13);
-    player_one.sort();
-    println!("Player one's deck: {}\n", player_one);
+    for i in 0..4 {
+        println!("Player {i}'s deck:");
+        game.players[i].show_cards();
+    }
 
-    let mut player_two = deck.pull_cards(13);
-    player_two.sort();
-    println!("Player two's deck: {}\n", player_two);
+    let mut rng = rand::thread_rng();
 
-    let mut player_three = deck.pull_cards(13);
-    player_three.sort();
-    println!("Player three's deck: {}\n", player_three);
+    for _ in 0..13 {
 
-    let mut player_four = deck.pull_cards(13);
-    player_four.sort();
-    println!("Player four's deck: {}\n", player_four);
+        for i in 0..4 {
+            let random_index = rng.gen_range(0..game.players[i].cards.size());
+            game.play_card(i, random_index);
+        }
+        game.players[0].show_cards();
+        game.show_table();
+        game.trick().expect("Couldn't finish trick");
+    }
+            
+
+            
 }
