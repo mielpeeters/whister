@@ -2,6 +2,7 @@ use rand::Rng;
 use rand::seq::SliceRandom;
 use std::fmt;
 use std::cmp::Ordering;
+use std::slice::Iter;
 
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Colour {
@@ -90,7 +91,7 @@ impl Deck {
         self.cards.sort();
     }
 
-    pub fn get_deck_of_colour(&self, colour: Colour) -> Deck {
+    pub fn get_deck_of_colour(&self, colour: &Colour) -> Deck {
         let amounts = Self::get_amounts(&self.cards);
 
         let start = match colour {
@@ -108,6 +109,33 @@ impl Deck {
         };
 
         Self::new_from(cards)
+    }
+
+    fn colour_score(&self, colour: &Colour) -> u32 {
+        let colour_deck = self.get_deck_of_colour(colour);
+
+        let mut score: u32 = 0;
+        for card in colour_deck.cards {
+            score += card.score();
+        }
+
+        score
+    }
+
+    pub fn best_colour_score(&self) -> (Colour, u32) {
+        let mut best_colour: Colour = Colour::Hearts;
+        let mut best_score: u32 = 0;
+        let mut current_score: u32;
+        
+        for colour in Colour::iterator() {
+            current_score = self.colour_score(colour);
+            if current_score > best_score {
+                best_score = current_score; // copy
+                best_colour = *colour;
+            }
+        }
+
+        (best_colour, best_score)
     }
 
     pub fn contains(&self, card: &Card) -> bool {
@@ -154,12 +182,20 @@ impl Deck {
 impl fmt::Display for Colour {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let clr = match self {
-            Colour::Hearts => "♥",
-            Colour::Spades => "♠",
-            Colour::Clubs => "♣",
-            Colour::Diamonds => "♦",
+            Colour::Spades => "\x1b[30;47m♠\x1b[0m",
+            Colour::Clubs => "\x1b[30;47m♣\x1b[0m",
+            Colour::Diamonds => "\x1b[91;47m♦\x1b[0m",
+            Colour::Hearts => "\x1b[91;47m♥\x1b[0m",
         };
+
         write!(f, "{}", clr)
+    }
+}
+
+impl Colour {
+    pub fn iterator() -> Iter<'static, Colour> {
+        static COLOURS: [Colour; 4] = [Colour::Spades, Colour::Clubs, Colour::Diamonds, Colour::Hearts];
+        COLOURS.iter()
     }
 }
 
@@ -174,7 +210,7 @@ impl fmt::Display for Card {
         }
         // Ten
         else if nb == "10" {
-            nb = String::from("⒑");
+            nb = String::from("T");
         }
         // Jack
         else if nb == "11" {
@@ -189,7 +225,8 @@ impl fmt::Display for Card {
             nb = String::from("K");
         }
 
-        write!(f, "{}{}", nb, self.colour)
+
+        write!(f, "\x1b[47m{}{}", nb, self.colour)
     }
 }
 
@@ -205,6 +242,16 @@ impl Ord for Card {
             self.number.cmp(&other.number)
         }
         
+    }
+}
+
+impl Card {
+    pub fn score(&self) -> u32 {
+        if self.number == 1 {
+            14
+        } else {
+            self.number.into()
+        }
     }
 }
 
@@ -228,18 +275,18 @@ impl fmt::Display for Deck {
             return write!(f, "  Empty")
         }
 
-        write!(f, "╭╴")?;
+        write!(f, "\x1b[2m╭╴\x1b[0m")?;
         
         let mut current_colour = self.cards[0].colour;
 
         for card in &self.cards {
             if card.colour != current_colour {
-                write!(f, "\n│ ")?;
+                write!(f, "\n\x1b[2m│\x1b[0m ")?;
                 current_colour = card.colour;
             }
             write!(f, "{}, ", card)?;
         }
 
-        write!(f, "\n╰╴count: {}", self.size())
+        write!(f, "\n\x1b[2m╰╴count: {}\x1b[0m", self.size())
     }
 }
