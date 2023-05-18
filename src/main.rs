@@ -3,7 +3,7 @@ This crate implements an AI which plays Colour Whist (nl: Kleurenwiezen).
 */
 
 use whister::{
-    playingcards::Deck, 
+    deck::Deck, 
     game::Game
 };
 use rand::{self, Rng};

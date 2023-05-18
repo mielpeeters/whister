@@ -1,22 +1,10 @@
 use rand::Rng;
 use rand::seq::SliceRandom;
 use std::fmt;
-use std::cmp::Ordering;
-use std::slice::Iter;
-
-#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
-pub enum Colour {
-    Spades,
-    Clubs,
-    Diamonds,
-    Hearts,
-}
-
-#[derive(Eq, Clone)]
-pub struct Card {
-    pub colour: Colour,
-    pub number: u8,
-}
+use crate::{
+    card::Card,
+    colour::Colour,
+};
 
 pub struct Deck {
     cards: Vec<Card>,
@@ -176,94 +164,6 @@ impl Deck {
     pub fn peek(&self) -> Card {
         let random_index = rand::thread_rng().gen_range(0..self.size());
         self.cards[random_index].clone()
-    }
-}
-
-impl fmt::Display for Colour {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let clr = match self {
-            Colour::Spades => "\x1b[30;47m♠\x1b[0m",
-            Colour::Clubs => "\x1b[30;47m♣\x1b[0m",
-            Colour::Diamonds => "\x1b[91;47m♦\x1b[0m",
-            Colour::Hearts => "\x1b[91;47m♥\x1b[0m",
-        };
-
-        write!(f, "{}", clr)
-    }
-}
-
-impl Colour {
-    pub fn iterator() -> Iter<'static, Colour> {
-        static COLOURS: [Colour; 4] = [Colour::Spades, Colour::Clubs, Colour::Diamonds, Colour::Hearts];
-        COLOURS.iter()
-    }
-}
-
-impl fmt::Display for Card {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut nb = self.number.to_string();
-
-        // special numbers
-        // Ace
-        if nb == "1" {
-            nb = String::from("A");
-        }
-        // Ten
-        else if nb == "10" {
-            nb = String::from("T");
-        }
-        // Jack
-        else if nb == "11" {
-            nb = String::from("J");
-        }
-        // Queen
-        else if nb == "12" {
-            nb = String::from("Q");
-        }
-        // King
-        else if nb == "13" {
-            nb = String::from("K");
-        }
-
-
-        write!(f, "\x1b[47m{}{}", nb, self.colour)
-    }
-}
-
-impl Ord for Card {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.colour != other.colour {
-            self.colour.cmp(&other.colour)
-        } else if self.number == 1 {
-            Ordering::Greater
-        } else if other.number == 1 {
-            Ordering::Less
-        } else {
-            self.number.cmp(&other.number)
-        }
-        
-    }
-}
-
-impl Card {
-    pub fn score(&self) -> u32 {
-        if self.number == 1 {
-            14
-        } else {
-            self.number.into()
-        }
-    }
-}
-
-impl PartialOrd for Card {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for Card {
-    fn eq(&self, other: &Self) -> bool {
-        self.colour == other.colour && self.number == other.number
     }
 }
 

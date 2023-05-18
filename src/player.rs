@@ -1,4 +1,7 @@
-use crate::{playingcards::{Deck, Card}};
+use crate::{
+    deck::Deck,
+    card::Card,
+};
 
 /// One of the four players in the colour whist game. 
 pub struct Player {

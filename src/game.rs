@@ -3,7 +3,8 @@
  */
 
 use crate::{
-    playingcards::{Deck, Card},
+    deck::Deck,
+    card::Card,
     player::Player,
 };
 
