@@ -1,3 +1,7 @@
+/*!
+ * Pack of cards, not necessarily a full deck. Lots of functionality.
+ */
+
 use rand::Rng;
 use rand::seq::SliceRandom;
 use std::fmt;

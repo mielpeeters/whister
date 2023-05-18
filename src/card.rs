@@ -1,3 +1,7 @@
+/*!
+ * Playing card, meaning a colour and a number/score. 
+ */
+
 use crate::colour::Colour;
 use std::cmp::Ordering;
 use std::fmt;

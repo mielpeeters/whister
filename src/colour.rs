@@ -1,3 +1,7 @@
+/*!
+ * The four colours of cards: Spades, Clubs, Diamonds and Hearts.
+ */
+
 use std::fmt;
 use std::slice::Iter;
 

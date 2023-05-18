@@ -1,3 +1,7 @@
+/*!
+ * Player of the colour whist game.
+ */
+
 use crate::{
     deck::Deck,
     card::Card,
