@@ -16,7 +16,6 @@ fn main() {
 
     for _ in 0..13 {
         game.play_round();
-        println!("Played trick: \n{}\n", game.last_trick());
     }
             
 

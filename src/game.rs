@@ -46,8 +46,13 @@ impl Game {
         Game{ tricks, table, players, turn: 0 }
     }
 
-    pub fn last_trick(&self) -> &Deck {
-        &self.tricks[self.tricks.len()-1]
+    fn show_last_trick(&self) {
+        if self.tricks.len() > 0 {
+            println!("Played trick:\n{}",self.tricks[self.tricks.len()-1]);
+        } else {
+            let deck = Deck::new_empty();
+            println!("Played trick:\n{}",deck);
+        }
     }
 
     pub fn trick(&mut self) -> Result<(), String> {
@@ -138,10 +143,12 @@ impl Game {
             let player = i % 4;
 
             if player == 0 {
+                println!("\x1b[1J\x1b[H");
+                self.show_last_trick();
                 println!("Current table: \n{}\n", self.table);
                 println!("Your hand:");
                 self.players[0].show_cards();
-                print!("type colour (S,C,D,H)\n");
+                print!("Enter a suit (S,C,D,H):\n");
                 let colour: String = read!();
 
                 let colour = match colour.as_str() {
@@ -152,10 +159,8 @@ impl Game {
                     &_ => Colour::Hearts,
                 };
 
-                print!("type number (1-13):\n");
+                print!("Enter a value (1-13):\n");
                 let number: u8 = read!();
-
-                println!("\x1b[2J");
 
                 let card = Card{colour, number};
 
