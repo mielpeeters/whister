@@ -181,6 +181,8 @@ impl Game {
                 println!("Your hand:");
                 self.players[0].show_cards();
 
+                let playable = self.alowed_cards(player);
+
                 let idx: usize = loop {
                     // loop until correct card given
                     print!("Enter a suit (S,C,D,H):\n");
@@ -200,10 +202,11 @@ impl Game {
                     let card = Card{colour, number};
                     
                     if let Some(i) = self.players[0].cards.index_of(&card) {
-                        break i;
-                    } else {
-                        println!("Try again!\n");
+                        if playable.contains(&i) {
+                            break i;
+                        } 
                     }
+                    println!("Try again!\n");
                 };
 
                 self.play_card(0, idx);
