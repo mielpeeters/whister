@@ -7,7 +7,6 @@ use crate::{
     card::Card,
     player::Player, colour::Colour,
 };
-use rand::{thread_rng, Rng};
 use text_io::read;
 
 pub struct Game {
@@ -19,6 +18,8 @@ pub struct Game {
     table: Deck,
     pub players: [Player; 4],
     turn: usize,
+    trump: Colour,
+    scores: [u8; 4]
 }
 
 impl Default for Game {
@@ -42,16 +43,14 @@ impl Game {
         // deck is empty now
 
         let players = [player_one, player_two, player_three, player_four];
+        let scores = [0,0,0,0];
 
-        Game{ tricks, table, players, turn: 0 }
+        Game{ tricks, table, players, turn: 0 , trump: Colour::Hearts, scores}
     }
 
     fn show_last_trick(&self) {
         if self.tricks.len() > 0 {
-            println!("Played trick:\n{}",self.tricks[self.tricks.len()-1]);
-        } else {
-            let deck = Deck::new_empty();
-            println!("Played trick:\n{}",deck);
+            println!("Played trick:\n{}\n",self.tricks[self.tricks.len()-1]);
         }
     }
 
@@ -83,21 +82,18 @@ impl Game {
         self.play(played).expect("Couldn't play card");
     }
 
+    /// returns the winning card index currently on the table
     fn winner(&self) -> usize {
         let mut best_card = self.table.card(0);
-        let mut winner = self.turn;
+        let mut winner = 0;
 
-        for i in 1..4 {
+        for i in 1..self.table.size() {
             let new_card = self.table.card(i);
 
-            if new_card.colour == best_card.colour {
-                // new card could be the better one
-                if new_card > best_card {
-                    best_card = new_card;
-                    winner = (self.turn + i) % 4;
-                }
-
-            } // TODO: add trouve functionality (should come before current if! always wins!)
+            if new_card.better(best_card, self.trump) {
+                best_card = new_card;
+                winner = i;
+            }
         }
 
         winner
@@ -111,10 +107,6 @@ impl Game {
         let player = &self.players[player];
 
         if self.table.size() != 0 { // i'm possibly restricted to the first-layed card this trick
-            // TODO: implement alowable card rules
-            //  - check first card type
-            //  - check if I have any
-            //      - if not, `if` scenario should happen -> turn these around!
             let first_colour = self.table.card(0).colour;
 
             if player.cards.has_colour(&first_colour) {
@@ -136,9 +128,49 @@ impl Game {
         result    
     }
 
-    pub fn play_round(&mut self) {
-        let mut rng = thread_rng();
+    fn my_better_cards(&self, player: usize, playable: &Vec<usize>) -> Vec<usize> {
+        let mut better_cards: Vec<usize> = Vec::new();
+
+        if self.table.size() == 0 {
+            // i'm the first player, can play any card
+            for i in 0..playable.len() {
+                better_cards.push(playable[i]);
+            }
+
+            return better_cards;
+        }
+
+        let player = &self.players[player];
+        let best_on_table = self.winner();
+        let best_on_table = self.table.card(best_on_table);
+
+        for i in 0..playable.len() {
+            let current_card = player.cards.card(playable[i]);
+            if current_card.better(best_on_table, self.trump) {
+                better_cards.push(playable[i]);
+            }
+        }
+
+        better_cards
+    }
+
+    fn play_best_current(&mut self, player: usize) {
+        // TODO improve AI significantly
         
+        // get alowed indeces
+        let playable = self.alowed_cards(player);
+
+        let better_cards = self.my_better_cards(player, &playable);
+
+        if better_cards.len() > 0 {
+            return self.play_card(player, better_cards[0]);
+        }
+
+        // play other card
+        self.play_card(player, playable[0]);
+    }
+
+    pub fn play_round(&mut self) {
         for i in self.turn..self.turn+4 {
             let player = i % 4;
 
@@ -148,41 +180,45 @@ impl Game {
                 println!("Current table: \n{}\n", self.table);
                 println!("Your hand:");
                 self.players[0].show_cards();
-                print!("Enter a suit (S,C,D,H):\n");
-                let colour: String = read!();
 
-                let colour = match colour.as_str() {
-                    "H" | "h" => Colour::Hearts,
-                    "D" | "d" => Colour::Diamonds,
-                    "C" | "c" => Colour::Clubs,
-                    "S" | "s" => Colour::Spades,
-                    &_ => Colour::Hearts,
+                let idx: usize = loop {
+                    // loop until correct card given
+                    print!("Enter a suit (S,C,D,H):\n");
+                    let colour: String = read!();
+                    
+                    let colour = match colour.as_str() {
+                        "H" | "h" => Colour::Hearts,
+                        "D" | "d" => Colour::Diamonds,
+                        "C" | "c" => Colour::Clubs,
+                        "S" | "s" => Colour::Spades,
+                        &_ => Colour::Hearts,
+                    };
+                    
+                    print!("Enter a value (1-13):\n");
+                    let number: u8 = read!();
+                    
+                    let card = Card{colour, number};
+                    
+                    if let Some(i) = self.players[0].cards.index_of(&card) {
+                        break i;
+                    } else {
+                        println!("Try again!\n");
+                    }
                 };
-
-                print!("Enter a value (1-13):\n");
-                let number: u8 = read!();
-
-                let card = Card{colour, number};
-
-                let idx = self.players[0].cards.index_of(&card);
 
                 self.play_card(0, idx);
             } else {
-                // get alowed indeces
-                let playable = self.alowed_cards(player);
-    
-                // get a random index from these
-                // TODO: here lies the AI part of the project!
-                let rand_index = rng.gen_range(0..playable.len());
-    
-                // play that card
-                self.play_card(player, playable[rand_index]);
+                self.play_best_current(player);
             }
         }
 
-        // TODO remove this line, change to winner of this trick (using the trick function's output maybe?)
-        self.turn = self.winner();
+        self.turn = (self.winner() + self.turn) % 4;
+        self.scores[self.turn] += 1;
 
         self.trick().expect("Couldn't play trick in play_round");
+    }
+
+    pub fn finish(&self) {
+        println!("The scores: {:?}", self.scores);
     }
 }

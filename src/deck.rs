@@ -146,8 +146,8 @@ impl Deck {
         self.cards.contains(card)
     }
 
-    pub fn index_of(&self, card: &Card) -> usize {
-        self.cards.iter().position(|c| c == card).unwrap()
+    pub fn index_of(&self, card: &Card) -> Option<usize> {
+        self.cards.iter().position(|c| c == card)
     }
 
     /// Remove the card at given index from this deck, and return ownership to caller.

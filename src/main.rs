@@ -17,7 +17,6 @@ fn main() {
     for _ in 0..13 {
         game.play_round();
     }
-            
 
-            
+    game.finish();
 }
