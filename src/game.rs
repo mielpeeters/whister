@@ -48,6 +48,25 @@ impl Game {
         Game{ tricks, table, players, turn: 0 , trump: Colour::Hearts, scores}
     }
 
+    pub fn new_round(&mut self) {
+        let mut deck = Deck::new_full();
+        deck.shuffle();
+
+        let cards = deck.pull_cards(13);
+        self.players[0].cards = cards;
+
+        let cards = deck.pull_cards(13);
+        self.players[1].cards = cards;
+
+        let cards = deck.pull_cards(13);
+        self.players[2].cards = cards;
+
+        let cards = deck.pull_cards(13);
+        self.players[3].cards = cards;
+
+        self.turn = 0;
+    }
+
     fn show_last_trick(&self) {
         if self.tricks.len() > 0 {
             println!("Played trick:\n{}\n",self.tricks[self.tricks.len()-1]);
@@ -223,7 +242,7 @@ impl Game {
         self.trick().expect("Couldn't play trick in play_round");
     }
 
-    pub fn finish(&self) {
+    pub fn show_scores(&self) {
         println!("The scores: {:?}", self.scores);
     }
 }

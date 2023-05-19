@@ -6,6 +6,7 @@ use whister::{
     deck::Deck, 
     game::Game
 };
+use text_io::read;
 
 fn main() {
     let mut deck = Deck::new_full();
@@ -14,9 +15,20 @@ fn main() {
     // random shuffle
     deck.shuffle(); 
 
-    for _ in 0..13 {
-        game.play_round();
+    loop {
+        for _ in 0..13 {
+            game.play_round();
+        }
+
+        game.show_scores();
+
+        println!("Play another round? (false / true)");
+        let answer: bool = read!();
+        if !answer {
+            break;
+        }
+        
+        game.new_round();
     }
 
-    game.finish();
 }
