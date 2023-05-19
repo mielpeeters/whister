@@ -35,6 +35,18 @@ impl Card {
             self.number.into()
         }
     }
+
+    pub fn better(&self, other: &Card, trump: Colour) -> bool {
+        if self.colour == other.colour {
+            return self > other;
+        } else {
+            if self.colour == trump {
+                return true;
+            } else {
+                return false;
+            }
+        }
+    }
 }
 
 impl PartialOrd for Card {
