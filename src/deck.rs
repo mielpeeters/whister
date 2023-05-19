@@ -36,12 +36,24 @@ impl Deck {
 
         Deck { cards }
     }
-
+    
     pub fn new_empty() -> Self {
         let cards: Vec<Card> = Vec::new();
         Deck {
             cards
         }
+    }
+    
+    pub fn card(&self, index: usize) -> &Card {
+        &self.cards[index]
+    }
+
+    pub fn has_colour(&self, colour: &Colour) -> bool {
+        self.get_deck_of_colour(colour).cards.len() > 0
+    }
+
+    pub fn colour_at(&self, index: usize) -> Colour {
+        self.cards[index].colour
     }
 
     fn get_amounts(cards: &Vec<Card>) -> Vec<usize> {
@@ -134,8 +146,8 @@ impl Deck {
         self.cards.contains(card)
     }
 
-    pub fn index_of(&self, card: &Card) -> Result<usize, usize> {
-        self.cards.binary_search(card)
+    pub fn index_of(&self, card: &Card) -> usize {
+        self.cards.iter().position(|c| c == card).unwrap()
     }
 
     /// Remove the card at given index from this deck, and return ownership to caller.

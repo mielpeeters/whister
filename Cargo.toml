@@ -9,3 +9,4 @@ description = "AI toolkit for playing colour whist."
 
 [dependencies]
 rand = "0.8"
+text_io = "0.1.12"
