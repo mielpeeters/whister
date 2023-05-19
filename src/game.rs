@@ -64,6 +64,8 @@ impl Game {
         }
     }
 
+    /// Put the card on the table.
+    /// Comsumes the card!
     fn play(&mut self, card: Card) -> Result<(), String> {
         if self.table.size() < 4 {
             self.table.add(card);
@@ -90,7 +92,7 @@ impl Game {
         for i in 1..self.table.size() {
             let new_card = self.table.card(i);
 
-            if new_card.better(best_card, self.trump) {
+            if new_card.better(best_card, &self.trump) {
                 best_card = new_card;
                 winner = i;
             }
@@ -146,7 +148,7 @@ impl Game {
 
         for i in 0..playable.len() {
             let current_card = player.cards.card(playable[i]);
-            if current_card.better(best_on_table, self.trump) {
+            if current_card.better(best_on_table, &self.trump) {
                 better_cards.push(playable[i]);
             }
         }

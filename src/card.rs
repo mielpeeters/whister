@@ -36,11 +36,11 @@ impl Card {
         }
     }
 
-    pub fn better(&self, other: &Card, trump: Colour) -> bool {
+    pub fn better(&self, other: &Card, trump: &Colour) -> bool {
         if self.colour == other.colour {
             return self > other;
         } else {
-            if self.colour == trump {
+            if self.colour == *trump {
                 return true;
             } else {
                 return false;

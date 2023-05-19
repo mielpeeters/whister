@@ -72,6 +72,7 @@ impl Deck {
         amounts
     }
 
+    /// creates a new deck from these cards, consumes the cards.
     pub fn new_from(cards: Vec<Card>) -> Deck {
         Deck { cards }
     }
