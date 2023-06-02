@@ -1,21 +1,21 @@
 /*!
- * Playing card, meaning a colour and a number/score. 
+ * Playing card, meaning a suit and a number/score. 
  */
 
-use crate::colour::Colour;
+use crate::suit::Suit;
 use std::cmp::Ordering;
 use std::fmt;
 
 #[derive(Eq, Clone)]
 pub struct Card {
-    pub colour: Colour,
+    pub suit: Suit,
     pub number: u8,
 }
 
 impl Ord for Card {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.colour != other.colour {
-            self.colour.cmp(&other.colour)
+        if self.suit != other.suit {
+            self.suit.cmp(&other.suit)
         } else if self.number == 1 {
             Ordering::Greater
         } else if other.number == 1 {
@@ -36,11 +36,11 @@ impl Card {
         }
     }
 
-    pub fn better(&self, other: &Card, trump: &Colour) -> bool {
-        if self.colour == other.colour {
+    pub fn better(&self, other: &Card, trump: &Suit) -> bool {
+        if self.suit == other.suit {
             return self > other;
         } else {
-            if self.colour == *trump {
+            if self.suit == *trump {
                 return true;
             } else {
                 return false;
@@ -57,7 +57,7 @@ impl PartialOrd for Card {
 
 impl PartialEq for Card {
     fn eq(&self, other: &Self) -> bool {
-        self.colour == other.colour && self.number == other.number
+        self.suit == other.suit && self.number == other.number
     }
 }
 
@@ -88,6 +88,6 @@ impl fmt::Display for Card {
         }
 
 
-        write!(f, "\x1b[47;30m{}{}", nb, self.colour)
+        write!(f, "\x1b[47;30m{}{}", nb, self.suit)
     }
 }

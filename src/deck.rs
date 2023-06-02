@@ -4,10 +4,10 @@
 
 use rand::Rng;
 use rand::seq::SliceRandom;
-use std::fmt;
+use std::{fmt, collections::HashMap};
 use crate::{
     card::Card,
-    colour::Colour,
+    suit::Suit,
 };
 
 pub struct Deck {
@@ -18,17 +18,17 @@ impl Deck {
     pub fn new_full() -> Self {
         let mut cards: Vec<Card> = Vec::new();
 
-        let colours = [
-            Colour::Hearts,
-            Colour::Clubs,
-            Colour::Diamonds,
-            Colour::Spades,
+        let suits = [
+            Suit::Hearts,
+            Suit::Clubs,
+            Suit::Diamonds,
+            Suit::Spades,
         ];
 
-        for clr in colours {
+        for clr in suits {
             for nmb in 1..14 {
                 cards.push(Card {
-                    colour: clr,
+                    suit: clr,
                     number: nmb,
                 });
             }
@@ -48,12 +48,12 @@ impl Deck {
         &self.cards[index]
     }
 
-    pub fn has_colour(&self, colour: &Colour) -> bool {
-        self.get_deck_of_colour(colour).cards.len() > 0
+    pub fn has_suit(&self, suit: &Suit) -> bool {
+        self.get_deck_of_suit(suit).cards.len() > 0
     }
 
-    pub fn colour_at(&self, index: usize) -> Colour {
-        self.cards[index].colour
+    pub fn suit_at(&self, index: usize) -> Suit {
+        self.cards[index].suit
     }
 
     fn get_amounts(cards: &Vec<Card>) -> Vec<usize> {
@@ -61,11 +61,11 @@ impl Deck {
         
         // count the amounts
         for card in cards {
-            match card.colour {
-                Colour::Spades => amounts[0] += 1,
-                Colour::Clubs => amounts[1] += 1,
-                Colour::Diamonds => amounts[2] += 1,
-                Colour::Hearts => amounts[3] += 1,
+            match card.suit {
+                Suit::Spades => amounts[0] += 1,
+                Suit::Clubs => amounts[1] += 1,
+                Suit::Diamonds => amounts[2] += 1,
+                Suit::Hearts => amounts[3] += 1,
             }
         }
 
@@ -91,56 +91,56 @@ impl Deck {
         self.cards.shuffle(&mut rand::thread_rng());
     }
 
-    /// sort the cards by colour first, then by ascending number
+    /// sort the cards by Suits first, then by ascending number
     pub fn sort(&mut self) {
         self.cards.sort();
     }
 
-    pub fn get_deck_of_colour(&self, colour: &Colour) -> Deck {
+    pub fn get_deck_of_suit(&self, suit: &Suit) -> Deck {
         let amounts = Self::get_amounts(&self.cards);
 
-        let start = match colour {
-            Colour::Spades => 0,
-            Colour::Clubs => amounts[0],
-            Colour::Diamonds => amounts[0] + amounts[1],
-            Colour::Hearts => self.size() - amounts[3],
+        let start = match suit {
+            Suit::Spades => 0,
+            Suit::Clubs => amounts[0],
+            Suit::Diamonds => amounts[0] + amounts[1],
+            Suit::Hearts => self.size() - amounts[3],
         };
 
-        let cards: Vec<Card> = match colour {
-            Colour::Spades => self.cards[start..start+amounts[0]].to_vec(),
-            Colour::Clubs => self.cards[start..start+amounts[1]].to_vec(),
-            Colour::Diamonds => self.cards[start..start+amounts[2]].to_vec(),
-            Colour::Hearts => self.cards[start..start+amounts[3]].to_vec(),
+        let cards: Vec<Card> = match suit {
+            Suit::Spades => self.cards[start..start+amounts[0]].to_vec(),
+            Suit::Clubs => self.cards[start..start+amounts[1]].to_vec(),
+            Suit::Diamonds => self.cards[start..start+amounts[2]].to_vec(),
+            Suit::Hearts => self.cards[start..start+amounts[3]].to_vec(),
         };
 
         Self::new_from(cards)
     }
 
-    fn colour_score(&self, colour: &Colour) -> u32 {
-        let colour_deck = self.get_deck_of_colour(colour);
+    fn suit_score(&self, suit: &Suit) -> u32 {
+        let suit_deck = self.get_deck_of_suit(suit);
 
         let mut score: u32 = 0;
-        for card in colour_deck.cards {
+        for card in suit_deck.cards {
             score += card.score();
         }
 
         score
     }
 
-    pub fn best_colour_score(&self) -> (Colour, u32) {
-        let mut best_colour: Colour = Colour::Hearts;
+    pub fn best_suit_score(&self) -> (Suit, u32) {
+        let mut best_suit: Suit = Suit::Hearts;
         let mut best_score: u32 = 0;
         let mut current_score: u32;
         
-        for colour in Colour::iterator() {
-            current_score = self.colour_score(colour);
+        for suit in Suit::iterator() {
+            current_score = self.suit_score(suit);
             if current_score > best_score {
                 best_score = current_score; // copy
-                best_colour = *colour;
+                best_suit = *suit;
             }
         }
 
-        (best_colour, best_score)
+        (best_suit, best_score)
     }
 
     pub fn contains(&self, card: &Card) -> bool {
@@ -177,11 +177,60 @@ impl Deck {
         println!("{}\n", self);
     }
 
-    /// look at one random card inside this deck
-    pub fn peek(&self) -> Card {
+    /// Look at one random card inside this deck
+    pub fn peek(&self) -> &Card {
         let random_index = rand::thread_rng().gen_range(0..self.size());
-        self.cards[random_index].clone()
+        &self.cards[random_index]
     }
+
+    pub fn lowest(&self, available: &Vec<usize>, trump: &Suit) -> usize {
+        let mut lowest = &self.cards[available[0]];
+        let mut lowest_index: usize = available[0];
+        let mut current: &Card;
+
+        for i in 1..available.len() {
+            current = &self.cards[available[i]];
+            if lowest.better(current, trump) {
+                lowest = current;
+                lowest_index = available[i];
+            }
+        }
+
+        lowest_index
+    }
+
+    pub fn highest(&self, available: &Vec<usize>, trump: &Suit) -> usize {
+        let mut highest = &self.cards[available[0]];
+        let mut highest_index: usize = available[0];
+        let mut current: &Card;
+
+        for i in 1..available.len() {
+            current = &self.cards[available[i]];
+            if current.better(highest, trump) {
+                highest = current;
+                highest_index = available[i];
+            }
+        }
+
+        highest_index
+    }
+
+    pub fn suit_amounts(&self) -> HashMap<Suit, usize> {
+        let mut map: HashMap<Suit, usize> = HashMap::new();
+
+        for suit in Suit::iterator() {
+            map.insert(*suit, 0);
+        }
+
+        let mut amnt: usize;
+        for card in &self.cards {
+            amnt = map.get(&card.suit).copied().unwrap_or(0);
+            map.insert(card.suit, amnt+1);
+        }
+
+        map
+    }
+
 }
 
 impl fmt::Display for Deck {
@@ -194,12 +243,12 @@ impl fmt::Display for Deck {
 
         write!(f, "\x1b[2m╭╴\x1b[0m")?;
         
-        let mut current_colour = self.cards[0].colour;
+        let mut current_suit = self.cards[0].suit;
 
         for card in &self.cards {
-            if card.colour != current_colour {
+            if card.suit != current_suit {
                 write!(f, "\n\x1b[2m│\x1b[0m ")?;
-                current_colour = card.colour;
+                current_suit = card.suit;
             }
             write!(f, "{}, ", card)?;
         }

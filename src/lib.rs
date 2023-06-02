@@ -4,7 +4,7 @@ This AI currently isn't really implemented yet, but the general structures of th
 */
 
 pub mod deck;
-pub mod colour;
+pub mod suit;
 pub mod card;
 pub mod game;
 pub mod player;

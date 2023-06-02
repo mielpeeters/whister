@@ -5,7 +5,7 @@
 use crate::{
     deck::Deck,
     card::Card,
-    player::Player, colour::Colour,
+    player::Player, suit::Suit,
 };
 use text_io::read;
 
@@ -18,8 +18,8 @@ pub struct Game {
     table: Deck,
     pub players: [Player; 4],
     turn: usize,
-    trump: Colour,
-    scores: [u8; 4]
+    trump: Suit,
+    scores: [u32; 4]
 }
 
 impl Default for Game {
@@ -45,7 +45,7 @@ impl Game {
         let players = [player_one, player_two, player_three, player_four];
         let scores = [0,0,0,0];
 
-        Game{ tricks, table, players, turn: 0 , trump: Colour::Hearts, scores}
+        Game{ tricks, table, players, turn: 0 , trump: Suit::Hearts, scores}
     }
 
     pub fn new_round(&mut self) {
@@ -64,7 +64,7 @@ impl Game {
         let cards = deck.pull_cards(13);
         self.players[3].cards = cards;
 
-        self.turn = 0;
+        // self.turn = 0;
     }
 
     fn show_last_trick(&self) {
@@ -128,12 +128,12 @@ impl Game {
         let player = &self.players[player];
 
         if self.table.size() != 0 { // i'm possibly restricted to the first-layed card this trick
-            let first_colour = self.table.card(0).colour;
+            let first_suit = self.table.card(0).suit;
 
-            if player.cards.has_colour(&first_colour) {
-                // only return indexes of cards of said colour
+            if player.cards.has_suit(&first_suit) {
+                // only return indexes of cards of said suit
                 for i in 0..player.cards.size() {
-                    if player.cards.colour_at(i) == first_colour {
+                    if player.cards.suit_at(i) == first_suit {
                         result.push(i);
                     }
                 }
@@ -175,20 +175,21 @@ impl Game {
         better_cards
     }
 
-    fn play_best_current(&mut self, player: usize) {
+    fn play_easy(&mut self, player: usize) {
         // TODO improve AI significantly
-        
+        // -> using REINFORCEMENT LEARNING CRATE
+    
         // get alowed indeces
         let playable = self.alowed_cards(player);
 
         let better_cards = self.my_better_cards(player, &playable);
 
         if better_cards.len() > 0 {
-            return self.play_card(player, better_cards[0]);
+            return self.play_card(player, self.players[player].cards.lowest(&better_cards, &Suit::Hearts));
         }
 
         // play other card
-        self.play_card(player, playable[0]);
+        self.play_card(player, self.players[player].cards.lowest(&playable, &Suit::Hearts));
     }
 
     pub fn play_round(&mut self) {
@@ -207,20 +208,20 @@ impl Game {
                 let idx: usize = loop {
                     // loop until correct card given
                     print!("Enter a suit (S,C,D,H):\n");
-                    let colour: String = read!();
+                    let suit: String = read!();
                     
-                    let colour = match colour.as_str() {
-                        "H" | "h" => Colour::Hearts,
-                        "D" | "d" => Colour::Diamonds,
-                        "C" | "c" => Colour::Clubs,
-                        "S" | "s" => Colour::Spades,
-                        &_ => Colour::Hearts,
+                    let suit = match suit.as_str() {
+                        "H" | "h" => Suit::Hearts,
+                        "D" | "d" => Suit::Diamonds,
+                        "C" | "c" => Suit::Clubs,
+                        "S" | "s" => Suit::Spades,
+                        &_ => Suit::Hearts,
                     };
                     
                     print!("Enter a value (1-13):\n");
                     let number: u8 = read!();
                     
-                    let card = Card{colour, number};
+                    let card = Card{suit, number};
                     
                     if let Some(i) = self.players[0].cards.index_of(&card) {
                         if playable.contains(&i) {
@@ -232,7 +233,7 @@ impl Game {
 
                 self.play_card(0, idx);
             } else {
-                self.play_best_current(player);
+                self.play_easy(player);
             }
         }
 

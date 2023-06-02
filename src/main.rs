@@ -15,6 +15,8 @@ fn main() {
     // random shuffle
     deck.shuffle(); 
 
+    let mut count = 0;
+
     loop {
         for _ in 0..13 {
             game.play_round();
@@ -25,6 +27,11 @@ fn main() {
         println!("Play another round? (false / true)");
         let answer: bool = read!();
         if !answer {
+            break;
+        }
+        
+        count += 1;
+        if count > 30000 {
             break;
         }
         
