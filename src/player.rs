@@ -39,7 +39,7 @@ impl Player {
     pub fn can_follow(&self, suit: Suit) -> bool {
         let map = self.cards.suit_amounts();
 
-        map.get(&suit).copied().unwrap_or(0) > 0
+        *map.get(&suit).unwrap_or(&0) > 0
     }
 }
 
