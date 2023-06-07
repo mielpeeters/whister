@@ -3,7 +3,7 @@
  */
 
 use crate::{
-    deck::Deck,
+    deck::{Deck, CardID},
     card::Card, 
     suit::Suit,
 };
@@ -41,6 +41,10 @@ impl Player {
         let map = self.cards.suit_amounts();
 
         *map.get(&suit).unwrap_or(&0) > 0
+    }
+
+    pub fn card(&self, card: CardID) -> &Card {
+        self.cards.card(card)
     }
 }
 

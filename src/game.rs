@@ -2,12 +2,10 @@
  * This module defines a game of colour whist, which consists of tricks and the current table
  */
 
-use std::{thread, time::Duration};
-
 use crate::{
-    deck::Deck,
+    deck::{Deck, CardID},
     card::Card,
-    player::Player, suit::Suit, fortify::GameState,
+    player::Player, suit::Suit, fortify::GameState, show,
 };
 use text_io::read;
 
@@ -70,12 +68,6 @@ impl Game {
         // self.turn = 0;
     }
 
-    fn show_last_trick(&self) {
-        if !self.tricks.is_empty() {
-            println!("Played trick:\n{}\n",self.tricks[self.tricks.len()-1]);
-        }
-    }
-
     pub fn trick(&mut self) -> Result<(), String> {
         if self.table.size() == 4 {
             let new_trick = self.table.pull_cards(4);
@@ -136,7 +128,7 @@ impl Game {
             if player.cards.has_suit(&first_suit) {
                 // only return indexes of cards of said suit
                 for i in 0..player.cards.size() {
-                    if player.cards.suit_at(i) == first_suit {
+                    if player.cards.suit_of(i) == first_suit {
                         result.push(i);
                     }
                 }
@@ -152,41 +144,43 @@ impl Game {
         result    
     }
 
-    fn my_better_cards(&self, player: usize, playable: &[usize]) -> Vec<usize> {
+    fn better_cards_of(&self, player: usize, playable: &[usize]) -> Vec<usize> {
         if self.table.size() == 0 {
             return playable.to_vec();
         }
 
         let player = &self.players[player];
-        let best_on_table = self.winner();
-        let best_on_table = self.table.card(best_on_table);
+        let best_on_table = self.table.card(self.winner());
 
         playable.iter().cloned()
-                .filter(|card| player.cards.card(*card).better(best_on_table, &self.trump))
+                .filter(|card| player.card(*card).better(best_on_table, &self.trump))
                 .collect()
     }
 
+    fn highest_card_of(&self, player: usize, out_of: &[CardID]) -> CardID {
+        self.players[player].cards.highest(out_of, &Suit::Hearts)
+    }
+
+    fn lowest_card_of(&self, player: usize, out_of: &[CardID]) -> CardID {
+        self.players[player].cards.lowest(out_of, &Suit::Hearts)
+    }
+
     fn play_easy(&mut self, player: usize) {
-        // TODO improve AI significantly
-        // -> using REINFORCEMENT LEARNING CRATE
-    
         // get alowed indeces
         let playable = self.alowed_cards(player);
+        
+        if self.table.size() == 0 {
+            return self.play_card(player, self.highest_card_of(player, &playable));
+        }
 
-        let better_cards = self.my_better_cards(player, &playable);
+        let better_cards = self.better_cards_of(player, &playable);
 
         if !better_cards.is_empty() {
-            return self.play_card(player, self.players[player].cards.lowest(&better_cards, &Suit::Hearts));
+            return self.play_card(player, self.lowest_card_of(player, &better_cards));
         }
 
         // play other card
-        self.play_card(player, self.players[player].cards.lowest(&playable, &Suit::Hearts));
-    }
-
-    fn show_table_wait(&self) {
-        println!("\x1b[1J\x1b[H");
-        println!("Current table: \n{}\n", self.table);
-        thread::sleep(Duration::from_millis(500));
+        self.play_card(player, self.lowest_card_of(player, &playable));
     }
 
     pub fn play_round(&mut self) {
@@ -194,8 +188,9 @@ impl Game {
             let player = i % 4;
 
             if player == 0 {
-                self.show_table_wait();
-                self.show_last_trick();
+                show::show_table_wait(&self.table);
+                show::show_last_non_empty(&self.tricks);
+
                 println!("Your hand:");
                 self.players[0].show_cards();
 
@@ -203,7 +198,7 @@ impl Game {
 
                 let idx: usize = loop {
                     // loop until correct card given
-                    println!("Enter a suit (S,C,D,H):");
+                    print!("Enter a suit (S,C,D,H): ");
                     let suit: String = read!();
                     
                     let suit = match suit.as_str() {
@@ -214,37 +209,40 @@ impl Game {
                         &_ => Suit::Hearts,
                     };
                     
-                    println!("Enter a value (1-13):");
+                    print!("Enter a value (1-13): ");
                     let number: u8 = read!();
                     
                     let card = Card{suit, number};
                     
-                    if let Some(i) = self.players[0].cards.index_of(&card) {
+                    if let Some(i) = self.players[0].cards.id_of(&card) {
                         if playable.contains(&i) {
                             break i;
-                        } 
+                        } else {
+                            print!("You can't play that card right now, ");
+                        }
+                    } else {
+                        print!("You don't have that card, ");
                     }
-                    println!("Try again!\n");
+                    println!("try again!\n");
                 };
 
                 self.play_card(0, idx);
 
-                self.show_table_wait();
+                show::show_table_wait(&self.table);
             } else {
                 // AI thinks for a little while
                 // thread::sleep(Duration::from_millis(500));
                 
                 self.play_easy(player);
 
-                self.show_table_wait();
+                show::show_table_wait(&self.table);
             }
         }
 
         self.turn = (self.winner() + self.turn) % 4;
         self.scores[self.turn] += 1;
 
-        println!("Winner this round: player {}", self.turn);
-        thread::sleep(Duration::from_millis(1500));
+        show::winner(self.turn);
 
         self.trick().expect("Couldn't play trick in play_round");
     }

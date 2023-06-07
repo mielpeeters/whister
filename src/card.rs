@@ -12,20 +12,6 @@ pub struct Card {
     pub number: u8,
 }
 
-impl Ord for Card {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.suit != other.suit {
-            self.suit.cmp(&other.suit)
-        } else if self.number == 1 {
-            Ordering::Greater
-        } else if other.number == 1 {
-            Ordering::Less
-        } else {
-            self.number.cmp(&other.number)
-        }
-    }
-}
-
 impl Card {
     pub fn score(&self) -> u32 {
         if self.number == 1 {
@@ -39,7 +25,17 @@ impl Card {
         if self.suit == other.suit {
             self > other
         } else {
-            self.suit == *trump 
+            self.suit == *trump
+        }
+    }
+}
+
+impl Ord for Card {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.suit != other.suit {
+            self.suit.cmp(&other.suit)
+        } else {
+            self.score().cmp(&other.score())
         }
     }
 }
@@ -55,27 +51,50 @@ impl fmt::Display for Card {
         let mut nb = self.number.to_string();
 
         // special numbers
-        // Ace
-        if nb == "1" {
-            nb = String::from("A");
-        }
-        // Ten
-        else if nb == "10" {
-            nb = String::from("T");
-        }
-        // Jack
-        else if nb == "11" {
-            nb = String::from("J");
-        }
-        // Queen
-        else if nb == "12" {
-            nb = String::from("Q");
-        }
-        // King
-        else if nb == "13" {
-            nb = String::from("K");
-        }
+        nb = match nb.as_str() {
+            "1" => "A".to_string(),
+            "10" => "T".to_string(),
+            "11" => "J".to_string(),
+            "12" => "D".to_string(),
+            "13" => "K".to_string(),
+            &_ => nb,
+        };
 
         write!(f, "\x1b[47;30m{}{}", nb, self.suit)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn cmp_same_suit() {
+        let ace_hearts = Card {
+            suit: Suit::Hearts,
+            number: 1,
+        };
+
+        let king_hearts = Card {
+            suit: Suit::Hearts,
+            number: 13,
+        };
+
+        assert!(ace_hearts > king_hearts);
+    }
+
+    #[test]
+    fn cmp_different_suit() {
+        let ace_clubs = Card {
+            suit: Suit::Clubs,
+            number: 1,
+        };
+
+        let king_hearts = Card {
+            suit: Suit::Hearts,
+            number: 13,
+        };
+
+        assert!(ace_clubs < king_hearts);
     }
 }

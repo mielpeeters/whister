@@ -15,6 +15,8 @@ pub struct Deck {
     cards: Vec<Card>,
 }
 
+pub type CardID = usize;
+
 impl Deck {
     pub fn new_full() -> Self {
         let mut cards: Vec<Card> = Vec::new();
@@ -45,7 +47,7 @@ impl Deck {
         }
     }
     
-    pub fn card(&self, index: usize) -> &Card {
+    pub fn card(&self, index: CardID) -> &Card {
         &self.cards[index]
     }
 
@@ -53,7 +55,7 @@ impl Deck {
         !self.get_deck_of_suit(suit).cards.is_empty()
     }
 
-    pub fn suit_at(&self, index: usize) -> Suit {
+    pub fn suit_of(&self, index: CardID) -> Suit {
         self.cards[index].suit
     }
 
@@ -139,14 +141,14 @@ impl Deck {
         self.cards.contains(card)
     }
 
-    pub fn index_of(&self, card: &Card) -> Option<usize> {
+    pub fn id_of(&self, card: &Card) -> Option<CardID> {
         self.cards.iter().position(|c| c == card)
     }
 
     /// Remove the card at given index from this deck, and return ownership to caller.
     /// 
     /// This is useful when playing a game, and a player puts a card from its deck to the table's deck.
-    pub fn remove(&mut self, index: usize) -> Card {
+    pub fn remove(&mut self, index: CardID) -> Card {
         self.cards.remove(index)
     }
 
@@ -175,7 +177,7 @@ impl Deck {
         &self.cards[random_index]
     }
 
-    pub fn lowest(&self, available: &[usize], trump: &Suit) -> usize {
+    pub fn lowest(&self, available: &[CardID], trump: &Suit) -> CardID {
         *available
             .iter()
             .enumerate()
@@ -186,11 +188,11 @@ impl Deck {
                     Ordering::Less
                 }
             })
-            .map(|(_, index) | index)
+            .map(|(_, card_id) | card_id)
             .unwrap()
     }
 
-    pub fn highest(&self, available: &[usize], trump: &Suit) -> usize {
+    pub fn highest(&self, available: &[CardID], trump: &Suit) -> CardID {
         *available
             .iter()
             .enumerate()
@@ -201,7 +203,7 @@ impl Deck {
                     Ordering::Less
                 }
             })
-            .map(|(_, i)| i)
+            .map(|(_, card_id)| card_id)
             .unwrap()
     }
 
@@ -244,5 +246,50 @@ impl fmt::Display for Deck {
         }
 
         write!(f, "\n\x1b[2m╰╴count: {}\x1b[0m", self.size())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn init_deck() -> Deck {
+        let mut deck = Deck::new_full();
+        deck.sort();
+        deck
+    }
+
+    #[test]
+    fn test_highest_one_suit() {
+        let deck = init_deck();
+        
+        let available: &[CardID] = &[0,1,2,3,4,5,6,7,8,9,10,11,12];
+
+        assert_eq!(deck.highest(available, &Suit::Hearts), 12);
+    }
+
+    #[test]
+    fn test_highest_mult_suits() {
+        let deck = init_deck();
+
+        let available: &[CardID] = &[0,1,2,3,4,5,6,7,8,9,10,11,12,24];
+
+        assert_eq!(deck.highest(available, &Suit::Hearts), 24);
+    }
+
+    #[test]
+    fn test_highest_trump() {
+        let deck = init_deck();
+
+        let available: &[CardID] = &[0,1,2,3,12,37];
+
+        assert_eq!(deck.highest(available, &Suit::Hearts), 37);
+    }
+
+    #[test]
+    fn test_suit_amounts() {
+        let deck = init_deck();
+
+        assert_eq!(*deck.suit_amounts().get(&Suit::Diamonds).unwrap(), 13);
     }
 }
