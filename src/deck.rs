@@ -4,12 +4,13 @@
 
 use rand::Rng;
 use rand::seq::SliceRandom;
-use std::{fmt, collections::HashMap};
+use std::{fmt, collections::HashMap, cmp::Ordering};
 use crate::{
     card::Card,
     suit::Suit,
 };
 
+#[derive(Hash, Eq, PartialEq)]
 pub struct Deck {
     cards: Vec<Card>,
 }
@@ -49,7 +50,7 @@ impl Deck {
     }
 
     pub fn has_suit(&self, suit: &Suit) -> bool {
-        self.get_deck_of_suit(suit).cards.len() > 0
+        !self.get_deck_of_suit(suit).cards.is_empty()
     }
 
     pub fn suit_at(&self, index: usize) -> Suit {
@@ -117,30 +118,21 @@ impl Deck {
     }
 
     fn suit_score(&self, suit: &Suit) -> u32 {
-        let suit_deck = self.get_deck_of_suit(suit);
-
-        let mut score: u32 = 0;
-        for card in suit_deck.cards {
-            score += card.score();
-        }
-
-        score
+        self.get_deck_of_suit(suit).cards.iter()
+                        .map(Card::score)
+                        .sum()
     }
 
     pub fn best_suit_score(&self) -> (Suit, u32) {
-        let mut best_suit: Suit = Suit::Hearts;
-        let mut best_score: u32 = 0;
-        let mut current_score: u32;
-        
-        for suit in Suit::iterator() {
-            current_score = self.suit_score(suit);
-            if current_score > best_score {
-                best_score = current_score; // copy
-                best_suit = *suit;
-            }
-        }
+        let best_suit = Suit::iterator()
+            .enumerate()
+            .max_by(|(_,suit_1),(_,suit_2)| {
+                self.suit_score(suit_1).cmp(&self.suit_score(suit_2))
+            })
+            .map(|(_,suit)| suit)
+            .unwrap();
 
-        (best_suit, best_score)
+        (*best_suit, self.suit_score(best_suit))
     }
 
     pub fn contains(&self, card: &Card) -> bool {
@@ -183,36 +175,34 @@ impl Deck {
         &self.cards[random_index]
     }
 
-    pub fn lowest(&self, available: &Vec<usize>, trump: &Suit) -> usize {
-        let mut lowest = &self.cards[available[0]];
-        let mut lowest_index: usize = available[0];
-        let mut current: &Card;
-
-        for i in 1..available.len() {
-            current = &self.cards[available[i]];
-            if lowest.better(current, trump) {
-                lowest = current;
-                lowest_index = available[i];
-            }
-        }
-
-        lowest_index
+    pub fn lowest(&self, available: &[usize], trump: &Suit) -> usize {
+        *available
+            .iter()
+            .enumerate()
+            .min_by(|(_, me),(_, other)| {
+                if self.card(**me).better(self.card(**other), trump) {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            })
+            .map(|(_, index) | index)
+            .unwrap()
     }
 
-    pub fn highest(&self, available: &Vec<usize>, trump: &Suit) -> usize {
-        let mut highest = &self.cards[available[0]];
-        let mut highest_index: usize = available[0];
-        let mut current: &Card;
-
-        for i in 1..available.len() {
-            current = &self.cards[available[i]];
-            if current.better(highest, trump) {
-                highest = current;
-                highest_index = available[i];
-            }
-        }
-
-        highest_index
+    pub fn highest(&self, available: &[usize], trump: &Suit) -> usize {
+        *available
+            .iter()
+            .enumerate()
+            .max_by(|(_, one), (_, two)| {
+                if self.card(**one).better(self.card(**two), trump) {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            })
+            .map(|(_, i)| i)
+            .unwrap()
     }
 
     pub fn suit_amounts(&self) -> HashMap<Suit, usize> {

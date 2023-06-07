@@ -8,3 +8,4 @@ pub mod suit;
 pub mod card;
 pub mod game;
 pub mod player;
+pub mod fortify;

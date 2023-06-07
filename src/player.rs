@@ -9,6 +9,7 @@ use crate::{
 };
 
 /// One of the four players in the colour whist game. 
+#[derive(Hash, PartialEq, Eq)]
 pub struct Player {
     pub cards: Deck,
 }

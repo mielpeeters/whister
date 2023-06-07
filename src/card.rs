@@ -1,12 +1,12 @@
 /*!
- * Playing card, meaning a suit and a number/score. 
+ * Playing card, meaning a suit and a number/score.
  */
 
 use crate::suit::Suit;
 use std::cmp::Ordering;
 use std::fmt;
 
-#[derive(Eq, Clone)]
+#[derive(Eq, Clone, PartialEq, Hash)]
 pub struct Card {
     pub suit: Suit,
     pub number: u8,
@@ -23,7 +23,6 @@ impl Ord for Card {
         } else {
             self.number.cmp(&other.number)
         }
-        
     }
 }
 
@@ -38,13 +37,9 @@ impl Card {
 
     pub fn better(&self, other: &Card, trump: &Suit) -> bool {
         if self.suit == other.suit {
-            return self > other;
+            self > other
         } else {
-            if self.suit == *trump {
-                return true;
-            } else {
-                return false;
-            }
+            self.suit == *trump 
         }
     }
 }
@@ -52,12 +47,6 @@ impl Card {
 impl PartialOrd for Card {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for Card {
-    fn eq(&self, other: &Self) -> bool {
-        self.suit == other.suit && self.number == other.number
     }
 }
 
@@ -86,7 +75,6 @@ impl fmt::Display for Card {
         else if nb == "13" {
             nb = String::from("K");
         }
-
 
         write!(f, "\x1b[47;30m{}{}", nb, self.suit)
     }
