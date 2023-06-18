@@ -1,3 +1,6 @@
+![](https://img.shields.io/github/license/mielpeeters/whister?labelColor=%23eeeeee&color=%23fcd04c&logo=gnu&logoColor=%23222222)
+![GitHub last commit (by committer)](https://img.shields.io/github/last-commit/mielpeeters/whister?labelColor=%23eeeeee&color=%234287f5&logo=github&logoColor=%23222222)
+
 # Whister
 This is a terminal-based card game written in Rust!
 
