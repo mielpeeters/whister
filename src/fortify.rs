@@ -7,7 +7,7 @@
 #![allow(unused_variables)]
 
 use crate::game::Game;
-use std::collections::HashMap;
+use std::{collections::HashMap, cmp::Ordering};
 
 
 /// All possible actions that the agent can take.
@@ -27,7 +27,7 @@ pub enum Action {
     BuyLow,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Default)]
+#[derive(PartialEq, Eq, Hash, Clone, Default, Copy)]
 pub struct GameState {}
 
 impl GameState {
@@ -47,35 +47,50 @@ pub struct QLearner {
 
 impl QLearner {
     pub fn train(&mut self, game: &Game) {
-        let current_state = game.state();
-        let current_values = self.q.get(&current_state).unwrap_or(&HashMap::new());
-
-        // determine a new action to take, from current state
-        let action = self.new_action(&current_state);
-        
-        // reward is the reward that's coupled with this action
-        let reward = game.reward() as f64;
-        // best_future is the highest Q-value from the state after taking this action
-        let best_future = 0.0;
-
-        // new value to assign to Q(s,a)
-        let v: f64 = {
-            // get the old value of Q(s,a) if it is available
-            let old_value = self.q.get(&current_state).and_then(|m| m.get(&action)).unwrap_or(&self.initial_value);
-
-            *old_value + self.rate * (reward + self.discount * best_future - *old_value)
-        };
-
-        self.q
+        let mut count = 0;
+        loop {
+            let current_state = game.state();
+            let current_values = self.q.get(&current_state).unwrap_or(&HashMap::new());
+            
+            // determine a new action to take, from current state
+            let action = self.new_action(&current_state);
+            
+            // TODO: actually take action
+            
+            // reward is the reward that's coupled with this action
+            let reward = game.reward() as f64;
+            let best_future = *self.best_action_score(&game.state()).1;
+            
+            // new value to assign to Q(s,a)
+            let v: f64 = {
+                // get the old value of Q(s,a) if it is available
+                let old_value = self.q.get(&current_state).and_then(|m| m.get(&action)).unwrap_or(&self.initial_value);
+                
+                *old_value + self.rate * (reward + self.discount * best_future - *old_value)
+            };
+            
+            self.q
             .entry(current_state)
             .or_insert_with(HashMap::new)
             .insert(action, v);
+            
+            count += 1;
+
+            if count > 10000 {
+                break
+            }
+        }
     }
 
     /// determine the best action in current state, based on the q function
-    pub fn best_action(&self, state: &GameState) -> Action {
-        // TODO
-        Action::RaiseHigh
+    pub fn best_action_score(&mut self, state: &GameState) -> (&Action, &f64) {
+        let best = self.q
+            .entry(*state)
+            .or_insert_with(HashMap::new)
+            .iter()
+            .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Equal));
+
+        best.unwrap_or((&Action::PlayWorst, &0.0))
     }
 
     /// determine the action the agent takes while exploring the statespace

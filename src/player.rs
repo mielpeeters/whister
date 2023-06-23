@@ -3,22 +3,22 @@
  */
 
 use crate::{
-    deck::{Deck, CardID},
-    card::Card, 
+    card::Card,
+    deck::{CardID, Deck},
     suit::Suit,
 };
 
-/// One of the four players in the colour whist game. 
+/// One of the four players in the colour whist game.
 #[derive(Hash, PartialEq, Eq)]
 pub struct Player {
     pub cards: Deck,
 }
 
 impl Player {
-    /// Create a new player, pulling `amount` cards from `deck` 
+    /// Create a new player, pulling `amount` cards from `deck`
     pub fn new_take_cards(deck: &mut Deck, amount: usize) -> Player {
         let pulled = deck.pull_cards(amount);
-        Player { cards: pulled}
+        Player { cards: pulled }
     }
 
     /// show the cards this player is holding, by first sorting them!
@@ -47,4 +47,3 @@ impl Player {
         self.cards.card(card)
     }
 }
-

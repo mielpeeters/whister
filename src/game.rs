@@ -3,24 +3,29 @@
  */
 
 use crate::{
-    deck::{Deck, CardID},
     card::Card,
-    player::Player, suit::Suit, fortify::GameState, show,
+    deck::{CardID, Deck},
+    fortify::GameState,
+    player::Player,
+    show,
+    suit::Suit,
 };
 use text_io::read;
+
+type PlayerID = usize;
 
 #[derive(Hash, Eq, PartialEq)]
 pub struct Game {
     /// tricks keeps track of the played tricks
     /// one trick is a deck of 4 cards
     tricks: Vec<Deck>,
-    /// table keeps track of which cards are 
+    /// table keeps track of which cards are
     /// on the table already
     table: Deck,
     pub players: [Player; 4],
-    turn: usize,
+    turn: PlayerID,
     trump: Suit,
-    scores: [u32; 4]
+    scores: [u32; 4],
 }
 
 impl Default for Game {
@@ -35,18 +40,24 @@ impl Game {
         deck.shuffle();
         let tricks: Vec<Deck> = Vec::new();
         let table: Deck = Deck::new_empty();
-        
+
         // create new players
         let player_one = Player::new_take_cards(&mut deck, 13);
         let player_two = Player::new_take_cards(&mut deck, 13);
         let player_three = Player::new_take_cards(&mut deck, 13);
         let player_four = Player::new_take_cards(&mut deck, 13);
-        // deck is empty now
 
         let players = [player_one, player_two, player_three, player_four];
-        let scores = [0,0,0,0];
+        let scores = [0, 0, 0, 0];
 
-        Game{ tricks, table, players, turn: 0 , trump: Suit::Hearts, scores}
+        Game {
+            tricks,
+            table,
+            players,
+            turn: 0,
+            trump: Suit::Hearts,
+            scores,
+        }
     }
 
     pub fn new_round(&mut self) {
@@ -85,7 +96,9 @@ impl Game {
             self.table.add(card);
             Ok(())
         } else {
-            Err(String::from("There are already four cards on the table. Can't play any more."))
+            Err(String::from(
+                "There are already four cards on the table. Can't play any more.",
+            ))
         }
     }
 
@@ -93,13 +106,13 @@ impl Game {
         self.table.show();
     }
 
-    pub fn play_card(&mut self, player: usize, card: usize) {
+    pub fn play_card(&mut self, player: PlayerID, card: usize) {
         let played = self.players[player].cards.remove(card);
         self.play(played).expect("Couldn't play card");
     }
 
     /// returns the winning card index currently on the table
-    fn winner(&self) -> usize {
+    fn winner(&self) -> PlayerID {
         let mut best_card = self.table.card(0);
         let mut winner = 0;
 
@@ -116,13 +129,14 @@ impl Game {
     }
 
     /// returns a vector of alowed cards for this player, in this round
-    fn alowed_cards(&self, player: usize) -> Vec<usize> {
+    fn alowed_cards(&self, player: PlayerID) -> Vec<usize> {
         // if the table is empty, every card is alowed
-        let mut result: Vec<usize> = Vec::new();
+        let mut result: Vec<CardID> = Vec::new();
 
         let player = &self.players[player];
 
-        if self.table.size() != 0 { // i'm possibly restricted to the first-layed card this trick
+        if self.table.size() != 0 {
+            // i'm possibly restricted to the first-layed card this trick
             let first_suit = self.table.card(0).suit;
 
             if player.cards.has_suit(&first_suit) {
@@ -141,10 +155,10 @@ impl Game {
             result.push(i);
         }
 
-        result    
+        result
     }
 
-    fn better_cards_of(&self, player: usize, playable: &[usize]) -> Vec<usize> {
+    fn better_cards_of(&self, player: PlayerID, playable: &[CardID]) -> Vec<CardID> {
         if self.table.size() == 0 {
             return playable.to_vec();
         }
@@ -152,23 +166,25 @@ impl Game {
         let player = &self.players[player];
         let best_on_table = self.table.card(self.winner());
 
-        playable.iter().cloned()
-                .filter(|card| player.card(*card).better(best_on_table, &self.trump))
-                .collect()
+        playable
+            .iter()
+            .cloned()
+            .filter(|card| player.card(*card).better(best_on_table, &self.trump))
+            .collect()
     }
 
-    fn highest_card_of(&self, player: usize, out_of: &[CardID]) -> CardID {
+    fn highest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> CardID {
         self.players[player].cards.highest(out_of, &Suit::Hearts)
     }
 
-    fn lowest_card_of(&self, player: usize, out_of: &[CardID]) -> CardID {
+    fn lowest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> CardID {
         self.players[player].cards.lowest(out_of, &Suit::Hearts)
     }
 
-    fn play_easy(&mut self, player: usize) {
+    fn play_easy(&mut self, player: PlayerID) {
         // get alowed indeces
         let playable = self.alowed_cards(player);
-        
+
         if self.table.size() == 0 {
             return self.play_card(player, self.highest_card_of(player, &playable));
         }
@@ -184,7 +200,7 @@ impl Game {
     }
 
     pub fn play_round(&mut self) {
-        for i in self.turn..self.turn+4 {
+        for i in self.turn..self.turn + 4 {
             let player = i % 4;
 
             if player == 0 {
@@ -200,7 +216,7 @@ impl Game {
                     // loop until correct card given
                     print!("Enter a suit (S,C,D,H): ");
                     let suit: String = read!();
-                    
+
                     let suit = match suit.as_str() {
                         "H" | "h" => Suit::Hearts,
                         "D" | "d" => Suit::Diamonds,
@@ -208,12 +224,12 @@ impl Game {
                         "S" | "s" => Suit::Spades,
                         &_ => Suit::Hearts,
                     };
-                    
+
                     print!("Enter a value (1-13): ");
                     let number: u8 = read!();
-                    
-                    let card = Card{suit, number};
-                    
+
+                    let card = Card { suit, number };
+
                     if let Some(i) = self.players[0].cards.id_of(&card) {
                         if playable.contains(&i) {
                             break i;
@@ -232,7 +248,7 @@ impl Game {
             } else {
                 // AI thinks for a little while
                 // thread::sleep(Duration::from_millis(500));
-                
+
                 self.play_easy(player);
 
                 show::show_table_wait(&self.table);
@@ -256,6 +272,7 @@ impl Game {
     }
 
     pub fn state(&self) -> GameState {
+        //TODO: implement me
         GameState::new()
     }
 }
