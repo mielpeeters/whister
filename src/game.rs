@@ -1,8 +1,6 @@
 /*!
  * This module defines a game of colour whist, which consists of tricks and the current table
  */
-
-
 use crate::{
     card::Card,
     deck::{CardID, Deck},
@@ -11,9 +9,8 @@ use crate::{
     show,
     suit::Suit,
 };
+
 use device_query::{DeviceQuery, DeviceState, Keycode};
-use termion::input::TermRead;
-use termion::event::Key;
 
 type PlayerID = usize;
 
@@ -219,6 +216,8 @@ impl Game {
         let mut prev_keys: Vec<Keycode> = Vec::new();
         let mut keys: Vec<Keycode>;
 
+        print!("\x1b[?25l");
+
         loop {
             keys = device_state.get_keys();
 
@@ -237,7 +236,7 @@ impl Game {
                     Keycode::J | Keycode::Down => active_player.cards.select_down(),
                     Keycode::K | Keycode::Up => active_player.cards.select_up(),
                     Keycode::L | Keycode::Right => active_player.cards.select_right(),
-                    Keycode::Enter => break,
+                    Keycode::Enter | Keycode::Space => break,
                     _ => (),
                 }
             }
@@ -246,6 +245,7 @@ impl Game {
 
             self.show_player_state(player);
         }
+        print!("\x1b[?25h");
     }
 
     fn show_player_state(&mut self, player: PlayerID) {

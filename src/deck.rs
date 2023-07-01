@@ -166,6 +166,9 @@ impl Deck {
     /// This is useful when playing a game, and a player puts a card from its deck to the table's deck.
     pub fn remove(&mut self, index: CardID) -> Card {
         self.suit_amounts[self.cards[index].suit as usize] -= 1;
+        if index == self.selected && index != 0 {
+            self.selected -= 1;
+        }
         self.cards.remove(index)
     }
 
@@ -284,6 +287,11 @@ impl Deck {
     pub fn select_left(&mut self) {
         let coor = self.selected_to_coordinate();
         
+        if coor.1 == 0 {
+            self.coordinate_to_selected((coor.0, self.suit_amounts[coor.0]-1));
+            return
+        }
+
         let mut new_x = coor.1 - 1;
 
         new_x %= self.suit_amounts[coor.0];
@@ -294,10 +302,11 @@ impl Deck {
     pub fn select_up(&mut self) {
         let coor = self.selected_to_coordinate();
         
-        let mut new_y = coor.1;
+        let mut new_y = coor.0;
         // loop until another suit is found that has at least one card
         loop {
-            new_y -= 1;
+
+            new_y += 3;
             new_y %= 4;
 
             if self.suit_amounts[new_y] > 0 {
@@ -305,9 +314,7 @@ impl Deck {
             }
         }
 
-
-        let mut new_x = coor.0;
-        new_x = min(self.suit_amounts[new_y], new_x);
+        let new_x = min(self.suit_amounts[new_y] - 1, coor.1);
 
         self.coordinate_to_selected((new_y, new_x));
     }
@@ -315,7 +322,7 @@ impl Deck {
     pub fn select_down(&mut self) {
         let coor = self.selected_to_coordinate();
         
-        let mut new_y = coor.1;
+        let mut new_y = coor.0;
         // loop until another suit is found that has at least one card
         loop {
             new_y += 1;
@@ -326,7 +333,7 @@ impl Deck {
             }
         }
 
-        let new_x = min(self.suit_amounts[new_y], coor.0);
+        let new_x = min(self.suit_amounts[new_y] - 1, coor.1);
 
         self.coordinate_to_selected((new_y, new_x));
     }
@@ -356,8 +363,9 @@ impl fmt::Display for Deck {
                 current_suit = card.suit;
             }
 
+            // show card, selected card shown differently
             if self.id_of(card).unwrap_or(0) == self.selected {
-                write!(f, "\x1b[5m{}, \x1b[0m", card)?;
+                write!(f, "\x1b[7m{}, \x1b[0m", card)?;
             } else {
                 write!(f, "{}, ", card)?;
             }
