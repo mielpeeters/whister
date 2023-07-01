@@ -28,7 +28,9 @@ pub enum Action {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Default, Copy)]
-pub struct GameState {}
+pub struct GameState {
+    
+}
 
 impl GameState {
     pub fn new() -> GameState {
@@ -43,10 +45,15 @@ pub struct QLearner {
     rate: f64,
     discount: f64,
     initial_value: f64,
+    iterations: u64,
 }
 
 impl QLearner {
-    pub fn train(&mut self, game: &Game) {
+    pub fn new() -> Self {
+        let q = HashMap::new();    
+        QLearner { q, rate: 0.2, discount: 0.05, initial_value: 0.0, iterations: 10000 }
+    }
+    pub fn train(&mut self, game: &mut Game) {
         let mut count = 0;
         loop {
             let current_state = game.state();
@@ -55,7 +62,7 @@ impl QLearner {
             // determine a new action to take, from current state
             let action = self.new_action(&current_state);
             
-            // TODO: actually take action
+            self.take_action(game, &action);
             
             // reward is the reward that's coupled with this action
             let reward = game.reward() as f64;
@@ -76,7 +83,7 @@ impl QLearner {
             
             count += 1;
 
-            if count > 10000 {
+            if count > self.iterations {
                 break
             }
         }
@@ -97,5 +104,26 @@ impl QLearner {
     fn new_action(&self, state: &GameState) -> Action {
         // TODO
         Action::PlayWorst
+    }
+
+    fn take_action(&self, game: &mut Game, action: &Action) {
+        let playable = game.alowed_cards(0);
+
+        match action {
+            Action::PlayWorst => {
+                let worst = game.lowest_card_of(0, &playable);
+                game.agent_plays_round(worst);
+            },
+            Action::RaiseLow => todo!(),
+            Action::RaiseHigh => todo!(),
+            Action::BuyHigh => todo!(),
+            Action::BuyLow => todo!(),
+        }
+    }
+}
+
+impl Default for QLearner {
+    fn default() -> Self {
+        Self::new()
     }
 }

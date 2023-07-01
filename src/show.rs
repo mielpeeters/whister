@@ -41,6 +41,4 @@ pub fn winner(player_id: usize) {
         _ => format!("\x1b[1;91mPlayer {}", player_id),
     });
     clear_fmt();
-
-    thread::sleep(Duration::from_millis(1500));
 }

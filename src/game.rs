@@ -29,6 +29,7 @@ pub struct Game {
     trump: Suit,
     scores: [u32; 4],
     human_players: usize,
+    wait: bool,
 }
 
 impl Default for Game {
@@ -60,7 +61,8 @@ impl Game {
             turn: 0,
             trump: Suit::Hearts,
             scores,
-            human_players: 0
+            human_players: 0,
+            wait: true,
         }
     }
 
@@ -88,8 +90,6 @@ impl Game {
 
         let cards = deck.pull_cards(13);
         self.players[3].cards = cards;
-
-        // self.turn = 0;
     }
 
     pub fn trick(&mut self) -> Result<(), String> {
@@ -109,9 +109,7 @@ impl Game {
             self.table.add(card);
             Ok(())
         } else {
-            Err(String::from(
-                "There are already four cards on the table. Can't play any more.",
-            ))
+            Err("There are already four cards on the table. Can't play any more.".to_string())
         }
     }
 
@@ -142,7 +140,7 @@ impl Game {
     }
 
     /// returns a vector of alowed cards for this player, in this round
-    fn alowed_cards(&self, player: PlayerID) -> Vec<usize> {
+    pub fn alowed_cards(&self, player: PlayerID) -> Vec<usize> {
         // if the table is empty, every card is alowed
         let mut result: Vec<CardID> = Vec::new();
 
@@ -171,6 +169,10 @@ impl Game {
         result
     }
 
+    pub fn card_id_of(&self, player: PlayerID, card: &Card) -> Option<CardID> {
+        self.players[player].cards.id_of(card)
+    }
+
     fn better_cards_of(&self, player: PlayerID, playable: &[CardID]) -> Vec<CardID> {
         if self.table.size() == 0 {
             return playable.to_vec();
@@ -186,11 +188,11 @@ impl Game {
             .collect()
     }
 
-    fn highest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> CardID {
+    pub fn highest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> CardID {
         self.players[player].cards.highest(out_of, &Suit::Hearts)
     }
 
-    fn lowest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> CardID {
+    pub fn lowest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> CardID {
         self.players[player].cards.lowest(out_of, &Suit::Hearts)
     }
 
@@ -329,7 +331,37 @@ impl Game {
 
         show::winner(self.turn);
 
+        show::wait();
+
         self.trick().expect("Couldn't play trick in play_round");
+    }
+
+    pub fn agent_plays_round(&mut self, card: CardID) {
+        let mut plyr = 0;
+
+        self.play_card(plyr, card);
+
+        loop {
+            if self.table.size() == 4 {
+                break;
+            }
+
+            plyr += 1;
+            self.play_easy(plyr);
+        }
+
+        self.turn = (self.winner() + self.turn) % 4;
+        self.scores[self.turn] += 1;
+
+        plyr = self.turn;
+        loop {
+            if plyr % 4 == 0 {
+                break;
+            }
+
+            self.play_easy(plyr);
+            plyr += 1;
+        }
     }
 
     pub fn show_scores(&self) {
@@ -337,7 +369,11 @@ impl Game {
     }
 
     pub fn reward(&self) -> u32 {
-        self.scores[0]
+        if self.turn == 0 {
+            10
+        } else {
+            0
+        }
     }
 
     pub fn state(&self) -> GameState {
