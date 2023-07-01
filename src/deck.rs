@@ -4,18 +4,20 @@
 
 use rand::Rng;
 use rand::seq::SliceRandom;
-use std::{fmt, collections::HashMap, cmp::Ordering};
+use std::{fmt, cmp::{Ordering, min}};
 use crate::{
     card::Card,
     suit::Suit,
 };
 
+pub type CardID = usize;
+
 #[derive(Hash, Eq, PartialEq)]
 pub struct Deck {
     cards: Vec<Card>,
+    selected: CardID,
+    suit_amounts: [usize; 4]
 }
-
-pub type CardID = usize;
 
 impl Deck {
     pub fn new_full() -> Self {
@@ -37,22 +39,26 @@ impl Deck {
             }
         }
 
-        Deck { cards }
+        Deck { cards , selected: usize::MAX, suit_amounts: [13,13,13,13]}
     }
     
     pub fn new_empty() -> Self {
         let cards: Vec<Card> = Vec::new();
-        Deck {
-            cards
-        }
+        let mut deck = Deck {
+            cards,
+            ..Default::default()
+        };
+        deck.set_suit_amounts();
+
+        deck
     }
     
     pub fn card(&self, index: CardID) -> &Card {
-        &self.cards[index]
+        &self.cards[index % self.cards.len()]  
     }
 
     pub fn has_suit(&self, suit: &Suit) -> bool {
-        !self.get_deck_of_suit(suit).cards.is_empty()
+        self.suit_amounts[*suit as usize] > 0
     }
 
     pub fn suit_of(&self, index: CardID) -> Suit {
@@ -77,13 +83,23 @@ impl Deck {
 
     /// creates a new deck from these cards, consumes the cards.
     pub fn new_from(cards: Vec<Card>) -> Deck {
-        Deck { cards }
+        let mut deck = Deck { cards , ..Default::default() };
+        deck.set_suit_amounts();
+
+        deck
     }
 
     /// Pull an amount of cards from the deck, in current deck order.
     pub fn pull_cards(&mut self, amount: usize) -> Deck {
         let pulled = self.cards.drain(..amount).collect();
-        Deck { cards: pulled }
+        let mut deck = Deck { cards: pulled , ..Default::default()};
+
+        // update both decks' suit amounts
+        self.set_suit_amounts();
+        deck.set_suit_amounts();
+
+        // return the pulled cards
+        deck
     }
 
     pub fn size(&self) -> usize {
@@ -149,6 +165,7 @@ impl Deck {
     /// 
     /// This is useful when playing a game, and a player puts a card from its deck to the table's deck.
     pub fn remove(&mut self, index: CardID) -> Card {
+        self.suit_amounts[self.cards[index].suit as usize] -= 1;
         self.cards.remove(index)
     }
 
@@ -158,6 +175,7 @@ impl Deck {
     /// 
     /// *Note: consumes the card!*
     pub fn add(&mut self, card: Card) {
+        self.suit_amounts[card.suit as usize] += 1;
         self.cards.push(card);
     }
 
@@ -207,22 +225,117 @@ impl Deck {
             .unwrap()
     }
 
-    pub fn suit_amounts(&self) -> HashMap<Suit, usize> {
-        let mut map: HashMap<Suit, usize> = HashMap::new();
+    fn set_suit_amounts(&mut self) {
+        let mut amounts: [usize; 4] = [0; 4];
+        
+        self.cards.iter().for_each(|c| amounts[c.suit as usize] += 1);
 
-        for suit in Suit::iterator() {
-            map.insert(*suit, 0);
-        }
-
-        let mut amnt: usize;
-        for card in &self.cards {
-            amnt = map.get(&card.suit).copied().unwrap_or(0);
-            map.insert(card.suit, amnt+1);
-        }
-
-        map
+        self.suit_amounts = amounts;        
     }
 
+    pub fn get_suit_amount(&self, suit: &Suit) -> usize {
+        self.suit_amounts[*suit as usize]
+    }
+
+    pub fn selected(&self) -> &Card {
+        &self.cards[self.selected]
+    }
+
+    pub fn selected_id(&self) -> CardID {
+        self.selected
+    }
+
+    /// returns (y, x) where y is the suit index and x is the index within that suit
+    fn selected_to_coordinate(&self) -> (usize, usize) {
+        let suit = self.card(self.selected).suit;
+
+        let y = suit as usize;
+
+        let mut start: usize = 0;
+        for s in 0..y {
+            start += self.suit_amounts[s];
+        }
+
+        let x = self.selected - start;
+
+        (y, x)
+    }
+
+    fn coordinate_to_selected(&mut self, coord: (usize, usize)) {
+        let mut selected: usize = 0;
+
+        for s in 0..coord.0 {
+            selected += self.suit_amounts[s];
+        }
+
+        self.selected = selected + coord.1;
+    }
+
+    pub fn select_right(&mut self) {
+        let coor = self.selected_to_coordinate();
+        
+        let mut new_x = coor.1 + 1;
+
+        new_x %= self.suit_amounts[coor.0];
+
+        self.coordinate_to_selected((coor.0, new_x));
+    }
+
+    pub fn select_left(&mut self) {
+        let coor = self.selected_to_coordinate();
+        
+        let mut new_x = coor.1 - 1;
+
+        new_x %= self.suit_amounts[coor.0];
+
+        self.coordinate_to_selected((coor.0, new_x));
+    }
+
+    pub fn select_up(&mut self) {
+        let coor = self.selected_to_coordinate();
+        
+        let mut new_y = coor.1;
+        // loop until another suit is found that has at least one card
+        loop {
+            new_y -= 1;
+            new_y %= 4;
+
+            if self.suit_amounts[new_y] > 0 {
+                break;
+            }
+        }
+
+
+        let mut new_x = coor.0;
+        new_x = min(self.suit_amounts[new_y], new_x);
+
+        self.coordinate_to_selected((new_y, new_x));
+    }
+
+    pub fn select_down(&mut self) {
+        let coor = self.selected_to_coordinate();
+        
+        let mut new_y = coor.1;
+        // loop until another suit is found that has at least one card
+        loop {
+            new_y += 1;
+            new_y %= 4;
+
+            if self.suit_amounts[new_y] > 0 {
+                break;
+            }
+        }
+
+        let new_x = min(self.suit_amounts[new_y], coor.0);
+
+        self.coordinate_to_selected((new_y, new_x));
+    }
+}
+
+impl Default for Deck {
+    fn default() -> Self {
+        Deck::new_full()
+    }
 }
 
 impl fmt::Display for Deck {
@@ -242,7 +355,12 @@ impl fmt::Display for Deck {
                 write!(f, "\n\x1b[2m│\x1b[0m ")?;
                 current_suit = card.suit;
             }
-            write!(f, "{}, ", card)?;
+
+            if self.id_of(card).unwrap_or(0) == self.selected {
+                write!(f, "\x1b[5m{}, \x1b[0m", card)?;
+            } else {
+                write!(f, "{}, ", card)?;
+            }
         }
 
         write!(f, "\n\x1b[2m╰╴count: {}\x1b[0m", self.size())
@@ -287,9 +405,20 @@ mod tests {
     }
 
     #[test]
-    fn test_suit_amounts() {
+    fn test_suit_amounts_init() {
         let deck = init_deck();
 
-        assert_eq!(*deck.suit_amounts().get(&Suit::Diamonds).unwrap(), 13);
+        assert_eq!(deck.get_suit_amount(&Suit::Diamonds), 13);
+    }
+
+    #[test]
+    fn test_suit_amounts_pull() {
+        let mut deck = init_deck();
+        let pulled = deck.pull_cards(12);
+
+        assert_eq!(deck.get_suit_amount(&Suit::Diamonds), 13 - pulled.get_suit_amount(&Suit::Diamonds));
+        assert_eq!(deck.get_suit_amount(&Suit::Hearts), 13 - pulled.get_suit_amount(&Suit::Hearts));
+        assert_eq!(deck.get_suit_amount(&Suit::Spades), 13 - pulled.get_suit_amount(&Suit::Spades));
+        assert_eq!(deck.get_suit_amount(&Suit::Clubs), 13 - pulled.get_suit_amount(&Suit::Clubs));
     }
 }

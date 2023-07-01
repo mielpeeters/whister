@@ -20,6 +20,15 @@ pub fn show_table_wait(table: &Deck) {
     thread::sleep(Duration::from_millis(500));
 }
 
+pub fn show_table(table: &Deck) {
+    clear();
+    println!("Current table: \n{}\n", table);
+}
+
+pub fn wait() {
+    thread::sleep(Duration::from_millis(500));
+}
+
 pub fn show_last_non_empty(deck: &Vec<Deck>) {
     if !deck.is_empty() {
         println!("Played trick:\n{}\n",deck[deck.len()-1]);

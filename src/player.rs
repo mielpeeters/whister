@@ -38,12 +38,18 @@ impl Player {
 
     /// Does this player have any cards of this suit?
     pub fn can_follow(&self, suit: Suit) -> bool {
-        let map = self.cards.suit_amounts();
-
-        *map.get(&suit).unwrap_or(&0) > 0
+        self.cards.has_suit(&suit)
     }
 
     pub fn card(&self, card: CardID) -> &Card {
         self.cards.card(card)
+    }
+
+    pub fn selected_card(&self) -> &Card {
+        self.cards.selected()
+    }
+
+    pub fn selected_id(&self) -> CardID {
+        self.cards.selected_id()
     }
 }

@@ -7,10 +7,10 @@ use std::slice::Iter;
 
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub enum Suit {
-    Spades,
-    Clubs,
-    Diamonds,
-    Hearts,
+    Spades = 0,
+    Clubs = 1,
+    Diamonds = 2,
+    Hearts = 3,
 }
 
 impl fmt::Display for Suit {

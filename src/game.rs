@@ -2,6 +2,7 @@
  * This module defines a game of colour whist, which consists of tricks and the current table
  */
 
+
 use crate::{
     card::Card,
     deck::{CardID, Deck},
@@ -10,7 +11,9 @@ use crate::{
     show,
     suit::Suit,
 };
-use text_io::read;
+use device_query::{DeviceQuery, DeviceState, Keycode};
+use termion::input::TermRead;
+use termion::event::Key;
 
 type PlayerID = usize;
 
@@ -26,6 +29,7 @@ pub struct Game {
     turn: PlayerID,
     trump: Suit,
     scores: [u32; 4],
+    human_players: usize,
 }
 
 impl Default for Game {
@@ -57,7 +61,17 @@ impl Game {
             turn: 0,
             trump: Suit::Hearts,
             scores,
+            human_players: 0
         }
+    }
+
+    pub fn add_human_players(&mut self, amount: usize) -> Result<usize, String> {
+        if self.human_players + amount > 4 {
+            return Err("Cannot have more than 4 players to this game...".to_string())
+        }
+        
+        self.human_players += amount;
+        Ok(self.human_players)
     }
 
     pub fn new_round(&mut self) {
@@ -140,7 +154,7 @@ impl Game {
             let first_suit = self.table.card(0).suit;
 
             if player.cards.has_suit(&first_suit) {
-                // only return indexes of cards of said suit
+                // only return indices of cards of said suit
                 for i in 0..player.cards.size() {
                     if player.cards.suit_of(i) == first_suit {
                         result.push(i);
@@ -199,50 +213,81 @@ impl Game {
         self.play_card(player, self.lowest_card_of(player, &playable));
     }
 
+    fn ask_card(&mut self, player: PlayerID) { 
+        let device_state = DeviceState::new();
+
+        let mut prev_keys: Vec<Keycode> = Vec::new();
+        let mut keys: Vec<Keycode>;
+
+        loop {
+            keys = device_state.get_keys();
+
+            if keys == prev_keys || keys.is_empty() {
+                prev_keys = keys;
+                continue
+            }
+
+            println!("{:?}", keys);
+
+            {    
+                let active_player = &mut self.players[player];
+
+                match keys[keys.len()-1] {
+                    Keycode::H | Keycode::Left => active_player.cards.select_left(),
+                    Keycode::J | Keycode::Down => active_player.cards.select_down(),
+                    Keycode::K | Keycode::Up => active_player.cards.select_up(),
+                    Keycode::L | Keycode::Right => active_player.cards.select_right(),
+                    Keycode::Enter => break,
+                    _ => (),
+                }
+            }
+
+            prev_keys = keys;
+
+            self.show_player_state(player);
+        }
+    }
+
+    fn show_player_state(&mut self, player: PlayerID) {
+        show::show_table(&self.table);
+        show::show_last_non_empty(&self.tricks);
+        println!("Your hand: [Player {player}]");
+        self.players[player].show_cards();
+    }
+
+    fn human_plays(&mut self, player: PlayerID) {
+
+        // showing what the game looks like atm
+        self.show_player_state(player);
+        show::wait();
+
+        // ask what card to play and check validity
+        let idx: CardID = {
+            let playable = self.alowed_cards(player);
+            
+            loop {
+                // loop until correct card given
+                self.ask_card(player);
+                
+                let i = self.players[player].selected_id();
+                
+                if playable.contains(&i) {
+                    break i;
+                } else {
+                    println!("You can't play that card right now, try again!");
+                }
+            }
+        };
+
+        self.play_card(player, idx);
+    }
+
     pub fn play_round(&mut self) {
         for i in self.turn..self.turn + 4 {
             let player = i % 4;
 
-            if player == 0 {
-                show::show_table_wait(&self.table);
-                show::show_last_non_empty(&self.tricks);
-
-                println!("Your hand:");
-                self.players[0].show_cards();
-
-                let playable = self.alowed_cards(player);
-
-                let idx: usize = loop {
-                    // loop until correct card given
-                    print!("Enter a suit (S,C,D,H): ");
-                    let suit: String = read!();
-
-                    let suit = match suit.as_str() {
-                        "H" | "h" => Suit::Hearts,
-                        "D" | "d" => Suit::Diamonds,
-                        "C" | "c" => Suit::Clubs,
-                        "S" | "s" => Suit::Spades,
-                        &_ => Suit::Hearts,
-                    };
-
-                    print!("Enter a value (1-13): ");
-                    let number: u8 = read!();
-
-                    let card = Card { suit, number };
-
-                    if let Some(i) = self.players[0].cards.id_of(&card) {
-                        if playable.contains(&i) {
-                            break i;
-                        } else {
-                            print!("You can't play that card right now, ");
-                        }
-                    } else {
-                        print!("You don't have that card, ");
-                    }
-                    println!("try again!\n");
-                };
-
-                self.play_card(0, idx);
+            if player < self.human_players  {
+                self.human_plays(player);
 
                 show::show_table_wait(&self.table);
             } else {
