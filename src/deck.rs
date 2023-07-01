@@ -248,6 +248,10 @@ impl Deck {
         self.selected
     }
 
+    pub fn set_selected(&mut self, selected: usize) {
+        self.selected = selected;
+    }
+
     /// returns (y, x) where y is the suit index and x is the index within that suit
     fn selected_to_coordinate(&self) -> (usize, usize) {
         let suit = self.card(self.selected).suit;

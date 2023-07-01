@@ -9,10 +9,10 @@ use crate::{
     show,
     suit::Suit,
 };
+use std::io::{stdin, stdout, Write};
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
-use std::io::{Write, stdout, stdin};
 
 type PlayerID = usize;
 
@@ -68,9 +68,9 @@ impl Game {
 
     pub fn add_human_players(&mut self, amount: usize) -> Result<usize, String> {
         if self.human_players + amount > 4 {
-            return Err("Cannot have more than 4 players to this game...".to_string())
+            return Err("Cannot have more than 4 players to this game...".to_string());
         }
-        
+
         self.human_players += amount;
         Ok(self.human_players)
     }
@@ -78,6 +78,9 @@ impl Game {
     pub fn new_round(&mut self) {
         let mut deck = Deck::new_full();
         deck.shuffle();
+
+        let tricks: Vec<Deck> = Vec::new();
+        self.tricks = tricks;
 
         let cards = deck.pull_cards(13);
         self.players[0].cards = cards;
@@ -115,6 +118,10 @@ impl Game {
 
     pub fn show_table(&self) {
         self.table.show();
+    }
+
+    pub fn show_table_wait(&self) {
+        show::show_table_wait(&self.table);
     }
 
     pub fn play_card(&mut self, player: PlayerID, card: usize) {
@@ -173,7 +180,7 @@ impl Game {
         self.players[player].cards.id_of(card)
     }
 
-    fn better_cards_of(&self, player: PlayerID, playable: &[CardID]) -> Vec<CardID> {
+    pub fn better_cards_of(&self, player: PlayerID, playable: &[CardID]) -> Vec<CardID> {
         if self.table.size() == 0 {
             return playable.to_vec();
         }
@@ -194,6 +201,16 @@ impl Game {
 
     pub fn lowest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> CardID {
         self.players[player].cards.lowest(out_of, &Suit::Hearts)
+    }
+
+    pub fn of_which_trump(&self, player: PlayerID, out_of: &[CardID]) -> Vec<CardID> {
+        let player = self.players.get(player).unwrap();
+        
+        out_of
+            .iter()
+            .cloned()
+            .filter(|card| player.card(*card).suit == Suit::Hearts)
+            .collect()
     }
 
     fn play_easy(&mut self, player: PlayerID) {
@@ -219,13 +236,11 @@ impl Game {
         println!("Press space to enter that card.");
     }
 
-    fn ask_card(&mut self, player: PlayerID) { 
+    fn ask_card(&mut self, player: PlayerID) {
         let stdin = stdin();
         let mut stdout = stdout().into_raw_mode().unwrap();
 
-        write!(stdout,
-            "{}", termion::cursor::Hide)
-                .unwrap();
+        write!(stdout, "{}", termion::cursor::Hide).unwrap();
 
         stdout.flush().unwrap();
 
@@ -238,28 +253,28 @@ impl Game {
                     Key::Char('h') | Key::Left => {
                         wrong_count = 0;
                         active_player.cards.select_left()
-                    },
+                    }
                     Key::Char('j') | Key::Down => {
                         wrong_count = 0;
                         active_player.cards.select_down()
-                    },
+                    }
                     Key::Char('k') | Key::Up => {
                         wrong_count = 0;
                         active_player.cards.select_up()
-                    },
+                    }
                     Key::Char('l') | Key::Right => {
                         wrong_count = 0;
                         active_player.cards.select_right()
-                    },
+                    }
                     Key::Char(' ') => break,
                     _ => {
                         wrong_count += 1;
-                    },
+                    }
                 }
             }
             stdout.flush().unwrap();
             stdout.suspend_raw_mode().unwrap();
-            
+
             if wrong_count > 0 {
                 self.input_instructions();
             } else {
@@ -268,10 +283,8 @@ impl Game {
 
             stdout.activate_raw_mode().unwrap();
         }
-        
-        write!(stdout,
-            "{}", termion::cursor::Show)
-            .unwrap();
+
+        write!(stdout, "{}", termion::cursor::Show).unwrap();
     }
 
     fn show_player_state(&mut self, player: PlayerID) {
@@ -282,7 +295,6 @@ impl Game {
     }
 
     fn human_plays(&mut self, player: PlayerID) {
-
         // showing what the game looks like atm
         self.show_player_state(player);
         show::wait();
@@ -290,13 +302,13 @@ impl Game {
         // ask what card to play and check validity
         let idx: CardID = {
             let playable = self.alowed_cards(player);
-            
+
             loop {
                 // loop until correct card given
                 self.ask_card(player);
-                
+
                 let i = self.players[player].selected_id();
-                
+
                 if playable.contains(&i) {
                     break i;
                 } else {
@@ -312,7 +324,7 @@ impl Game {
         for i in self.turn..self.turn + 4 {
             let player = i % 4;
 
-            if player < self.human_players  {
+            if player < self.human_players {
                 self.human_plays(player);
 
                 show::show_table_wait(&self.table);
@@ -352,6 +364,11 @@ impl Game {
 
         self.turn = (self.winner() + self.turn) % 4;
         self.scores[self.turn] += 1;
+        self.trick().expect("Couldn't play trick in play_round");
+
+        if self.tricks.len() == 13 {
+            self.new_round();
+        }
 
         plyr = self.turn;
         loop {
@@ -360,6 +377,48 @@ impl Game {
             }
 
             self.play_easy(plyr);
+            plyr += 1;
+        }
+    }
+
+    pub fn agent_plays_round_slowly(&mut self, card: CardID) {
+        self.players[0].cards.set_selected(card);
+        self.show_player_state(0);
+        show::wait();
+        
+        let mut plyr = 0;
+
+        self.play_card(plyr, card);
+
+        loop {
+            if self.table.size() == 4 {
+                break;
+            }
+
+            plyr += 1;
+            self.play_easy(plyr);
+            self.show_player_state(0);
+            show::wait();
+        }
+
+        self.turn = (self.winner() + self.turn) % 4;
+        self.scores[self.turn] += 1;
+        self.trick().expect("Couldn't play trick in play_round");
+
+        if self.tricks.len() == 13 {
+            self.new_round();
+        }
+
+        plyr = self.turn;
+        loop {
+            if plyr % 4 == 0 {
+                break;
+            }
+
+            self.play_easy(plyr);
+            self.show_player_state(0);
+            show::wait();
+
             plyr += 1;
         }
     }
@@ -376,8 +435,38 @@ impl Game {
         }
     }
 
+    pub fn can_follow(&self, player: PlayerID) -> bool {
+        if self.table.size() == 0 {
+            return true;
+        }
+
+        if self.players[player].can_follow(self.table.card(0).suit) {
+            return true;
+        }
+
+        false
+    }
+
+    pub fn first(&self) -> bool {
+        self.table.size() == 0
+    }
+
     pub fn state(&self) -> GameState {
-        //TODO: implement me
-        GameState::new()
+        let can_follow: bool = self.can_follow(0);
+        let nb_trump = self
+            .players
+            .get(0)
+            .unwrap()
+            .cards
+            .get_suit_amount(&Suit::Hearts);
+        
+        let first = self.first();
+
+        GameState {
+            has_trump: self.players[0].can_follow(Suit::Hearts),
+            can_follow,
+            nb_trump,
+            first
+        }
     }
 }

@@ -2,23 +2,60 @@
 This crate implements an AI which plays Colour Whist (nl: Kleurenwiezen).
 */
 use whister::{
-    deck::Deck, 
-    game::Game
+    game::Game, fortify::QLearner
 };
 use text_io::read;
 
 fn main() {
-    let mut deck = Deck::new_full();
     let mut game = Game::new();
+
+    println!("Will an AI player participate? (true / false)");
+    let ai_player: bool = read!();
+
+    let mut count = 0;
+
+    if ai_player {
+        println!("how many iterations?");
+        let iterations: u64 = read!();
+
+        let mut learner = QLearner {
+            game: Game::new(),
+            iterations,
+            ..Default::default()
+        };
+
+        learner.train();
+
+        loop {
+            for _ in 0..100000 {
+                let mut best_action = *learner.best_action_score(&game.state()).0;
+                let alowed = learner.alowed_actions(&game);
+
+                if !alowed.iter().any(|a| *a == best_action) {
+                    best_action = alowed[0];
+                }
+
+                let best_card_id = learner.action_card_id(&best_action, &game);
+
+                game.agent_plays_round(best_card_id);
+            }
+
+            game.show_scores();
+            
+            println!("Play another round? (false / true)");
+            let answer: bool = read!();
+            if !answer {
+                break;
+            }
+        }
+
+        return 
+    } 
 
     println!("How many human players will participate?");
     let answer: usize = read!();
     game.add_human_players(answer).expect("Unable to add human players.");
 
-    // random shuffle
-    deck.shuffle(); 
-
-    let mut count = 0;
 
     loop {
         for _ in 0..13 {
