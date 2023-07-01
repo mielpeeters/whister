@@ -92,7 +92,7 @@ impl Deck {
     /// Pull an amount of cards from the deck, in current deck order.
     pub fn pull_cards(&mut self, amount: usize) -> Deck {
         let pulled = self.cards.drain(..amount).collect();
-        let mut deck = Deck { cards: pulled , ..Default::default()};
+        let mut deck = Deck { cards: pulled, ..Default::default()};
 
         // update both decks' suit amounts
         self.set_suit_amounts();

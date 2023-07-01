@@ -9,8 +9,10 @@ use crate::{
     show,
     suit::Suit,
 };
-
-use device_query::{DeviceQuery, DeviceState, Keycode};
+use termion::event::Key;
+use termion::input::TermRead;
+use termion::raw::IntoRawMode;
+use std::io::{Write, stdout, stdin};
 
 type PlayerID = usize;
 
@@ -210,42 +212,64 @@ impl Game {
         self.play_card(player, self.lowest_card_of(player, &playable));
     }
 
+    fn input_instructions(&self) {
+        println!("Press the arrow or vim keys to move the selected card.");
+        println!("Press space to enter that card.");
+    }
+
     fn ask_card(&mut self, player: PlayerID) { 
-        let device_state = DeviceState::new();
+        let stdin = stdin();
+        let mut stdout = stdout().into_raw_mode().unwrap();
 
-        let mut prev_keys: Vec<Keycode> = Vec::new();
-        let mut keys: Vec<Keycode>;
+        write!(stdout,
+            "{}", termion::cursor::Hide)
+                .unwrap();
 
-        print!("\x1b[?25l");
+        stdout.flush().unwrap();
 
-        loop {
-            keys = device_state.get_keys();
-
-            if keys == prev_keys || keys.is_empty() {
-                prev_keys = keys;
-                continue
-            }
-
-            println!("{:?}", keys);
-
-            {    
+        let mut wrong_count = 0;
+        for c in stdin.keys() {
+            {
                 let active_player = &mut self.players[player];
 
-                match keys[keys.len()-1] {
-                    Keycode::H | Keycode::Left => active_player.cards.select_left(),
-                    Keycode::J | Keycode::Down => active_player.cards.select_down(),
-                    Keycode::K | Keycode::Up => active_player.cards.select_up(),
-                    Keycode::L | Keycode::Right => active_player.cards.select_right(),
-                    Keycode::Enter | Keycode::Space => break,
-                    _ => (),
+                match c.unwrap() {
+                    Key::Char('h') | Key::Left => {
+                        wrong_count = 0;
+                        active_player.cards.select_left()
+                    },
+                    Key::Char('j') | Key::Down => {
+                        wrong_count = 0;
+                        active_player.cards.select_down()
+                    },
+                    Key::Char('k') | Key::Up => {
+                        wrong_count = 0;
+                        active_player.cards.select_up()
+                    },
+                    Key::Char('l') | Key::Right => {
+                        wrong_count = 0;
+                        active_player.cards.select_right()
+                    },
+                    Key::Char(' ') => break,
+                    _ => {
+                        wrong_count += 1;
+                    },
                 }
             }
+            stdout.flush().unwrap();
+            stdout.suspend_raw_mode().unwrap();
+            
+            if wrong_count > 0 {
+                self.input_instructions();
+            } else {
+                self.show_player_state(player);
+            }
 
-            prev_keys = keys;
-
-            self.show_player_state(player);
+            stdout.activate_raw_mode().unwrap();
         }
-        print!("\x1b[?25h");
+        
+        write!(stdout,
+            "{}", termion::cursor::Show)
+            .unwrap();
     }
 
     fn show_player_state(&mut self, player: PlayerID) {
