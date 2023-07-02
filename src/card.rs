@@ -21,11 +21,13 @@ impl Card {
         }
     }
 
-    pub fn better(&self, other: &Card, trump: &Suit) -> bool {
+    pub fn better(&self, other: &Card, trump: &Suit) -> Ordering {
         if self.suit == other.suit {
-            self > other
+            self.cmp(other)
+        } else if self.suit == *trump {
+            Ordering::Greater
         } else {
-            self.suit == *trump
+            self.score().cmp(&other.score())
         }
     }
 }

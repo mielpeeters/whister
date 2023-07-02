@@ -27,7 +27,7 @@ fn main() {
         learner.train();
 
         loop {
-            for _ in 0..100000 {
+            for _ in 0..40000 {
                 let mut best_action = *learner.best_action_score(&game.state()).0;
                 let alowed = learner.alowed_actions(&game);
 
@@ -37,7 +37,19 @@ fn main() {
 
                 let best_card_id = learner.action_card_id(&best_action, &game);
 
-                game.agent_plays_round(best_card_id);
+                let played_card = game.players.get(0).unwrap().card(best_card_id).clone();
+                let state = game.state();
+
+                game.agent_plays_round_slowly(best_card_id);
+
+                println!("Played Card: {}\n", played_card);
+                println!("Played CardID: {}\n", best_card_id);
+                println!("Played Action: {}\n", best_action);
+
+                println!("From state: {}\n", state);
+
+                println!("Press [enter] to continue");
+                let _: String = read!();
             }
 
             game.show_scores();
@@ -62,6 +74,7 @@ fn main() {
             game.play_round();
         }
 
+        game.new_round();
         game.show_scores();
 
         println!("Play another round? (false / true)");
@@ -75,7 +88,6 @@ fn main() {
             break;
         }
         
-        game.new_round();
     }
 
 }

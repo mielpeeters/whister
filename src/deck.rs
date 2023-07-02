@@ -2,33 +2,29 @@
  * Pack of cards, not necessarily a full deck. Lots of functionality.
  */
 
-use rand::Rng;
+use crate::{card::Card, suit::Suit};
 use rand::seq::SliceRandom;
-use std::{fmt, cmp::{Ordering, min}};
-use crate::{
-    card::Card,
-    suit::Suit,
+use rand::Rng;
+use std::{
+    cmp::min,
+    fmt,
 };
 
 pub type CardID = usize;
 
 #[derive(Hash, Eq, PartialEq)]
 pub struct Deck {
-    cards: Vec<Card>,
+    pub cards: Vec<Card>,
     selected: CardID,
-    suit_amounts: [usize; 4]
+    suit_amounts: [usize; 4],
+    curr: usize,
 }
 
 impl Deck {
     pub fn new_full() -> Self {
         let mut cards: Vec<Card> = Vec::new();
 
-        let suits = [
-            Suit::Hearts,
-            Suit::Clubs,
-            Suit::Diamonds,
-            Suit::Spades,
-        ];
+        let suits = [Suit::Hearts, Suit::Clubs, Suit::Diamonds, Suit::Spades];
 
         for clr in suits {
             for nmb in 1..14 {
@@ -39,9 +35,14 @@ impl Deck {
             }
         }
 
-        Deck { cards , selected: usize::MAX, suit_amounts: [13,13,13,13]}
+        Deck {
+            cards,
+            selected: usize::MAX,
+            suit_amounts: [13, 13, 13, 13],
+            curr: 0,
+        }
     }
-    
+
     pub fn new_empty() -> Self {
         let cards: Vec<Card> = Vec::new();
         let mut deck = Deck {
@@ -52,9 +53,9 @@ impl Deck {
 
         deck
     }
-    
+
     pub fn card(&self, index: CardID) -> &Card {
-        &self.cards[index % self.cards.len()]  
+        &self.cards[index % self.cards.len()]
     }
 
     pub fn has_suit(&self, suit: &Suit) -> bool {
@@ -66,8 +67,8 @@ impl Deck {
     }
 
     fn get_amounts(cards: &Vec<Card>) -> Vec<usize> {
-        let mut amounts: Vec<usize> = vec![0,0,0,0];
-        
+        let mut amounts: Vec<usize> = vec![0, 0, 0, 0];
+
         // count the amounts
         for card in cards {
             match card.suit {
@@ -83,7 +84,10 @@ impl Deck {
 
     /// creates a new deck from these cards, consumes the cards.
     pub fn new_from(cards: Vec<Card>) -> Deck {
-        let mut deck = Deck { cards , ..Default::default() };
+        let mut deck = Deck {
+            cards,
+            ..Default::default()
+        };
         deck.set_suit_amounts();
 
         deck
@@ -92,7 +96,10 @@ impl Deck {
     /// Pull an amount of cards from the deck, in current deck order.
     pub fn pull_cards(&mut self, amount: usize) -> Deck {
         let pulled = self.cards.drain(..amount).collect();
-        let mut deck = Deck { cards: pulled, ..Default::default()};
+        let mut deck = Deck {
+            cards: pulled,
+            ..Default::default()
+        };
 
         // update both decks' suit amounts
         self.set_suit_amounts();
@@ -126,28 +133,30 @@ impl Deck {
         };
 
         let cards: Vec<Card> = match suit {
-            Suit::Spades => self.cards[start..start+amounts[0]].to_vec(),
-            Suit::Clubs => self.cards[start..start+amounts[1]].to_vec(),
-            Suit::Diamonds => self.cards[start..start+amounts[2]].to_vec(),
-            Suit::Hearts => self.cards[start..start+amounts[3]].to_vec(),
+            Suit::Spades => self.cards[start..start + amounts[0]].to_vec(),
+            Suit::Clubs => self.cards[start..start + amounts[1]].to_vec(),
+            Suit::Diamonds => self.cards[start..start + amounts[2]].to_vec(),
+            Suit::Hearts => self.cards[start..start + amounts[3]].to_vec(),
         };
 
         Self::new_from(cards)
     }
 
     fn suit_score(&self, suit: &Suit) -> u32 {
-        self.get_deck_of_suit(suit).cards.iter()
-                        .map(Card::score)
-                        .sum()
+        self.get_deck_of_suit(suit)
+            .cards
+            .iter()
+            .map(Card::score)
+            .sum()
     }
 
     pub fn best_suit_score(&self) -> (Suit, u32) {
         let best_suit = Suit::iterator()
             .enumerate()
-            .max_by(|(_,suit_1),(_,suit_2)| {
+            .max_by(|(_, suit_1), (_, suit_2)| {
                 self.suit_score(suit_1).cmp(&self.suit_score(suit_2))
             })
-            .map(|(_,suit)| suit)
+            .map(|(_, suit)| suit)
             .unwrap();
 
         (*best_suit, self.suit_score(best_suit))
@@ -162,7 +171,7 @@ impl Deck {
     }
 
     /// Remove the card at given index from this deck, and return ownership to caller.
-    /// 
+    ///
     /// This is useful when playing a game, and a player puts a card from its deck to the table's deck.
     pub fn remove(&mut self, index: CardID) -> Card {
         self.suit_amounts[self.cards[index].suit as usize] -= 1;
@@ -172,10 +181,10 @@ impl Deck {
         self.cards.remove(index)
     }
 
-    /// Add the given card to the deck. 
-    /// 
+    /// Add the given card to the deck.
+    ///
     /// Useful for adding a card to the table's deck for example.
-    /// 
+    ///
     /// *Note: consumes the card!*
     pub fn add(&mut self, card: Card) {
         self.suit_amounts[card.suit as usize] += 1;
@@ -202,14 +211,8 @@ impl Deck {
         *available
             .iter()
             .enumerate()
-            .min_by(|(_, me),(_, other)| {
-                if self.card(**me).better(self.card(**other), trump) {
-                    Ordering::Greater
-                } else {
-                    Ordering::Less
-                }
-            })
-            .map(|(_, card_id) | card_id)
+            .min_by(|(_, me), (_, other)| self.card(**me).better(self.card(**other), trump))
+            .map(|(_, card_id)| card_id)
             .unwrap()
     }
 
@@ -217,23 +220,19 @@ impl Deck {
         *available
             .iter()
             .enumerate()
-            .max_by(|(_, one), (_, two)| {
-                if self.card(**one).better(self.card(**two), trump) {
-                    Ordering::Greater
-                } else {
-                    Ordering::Less
-                }
-            })
+            .max_by(|(_, one), (_, two)| self.card(**one).better(self.card(**two), trump))
             .map(|(_, card_id)| card_id)
             .unwrap()
     }
 
     fn set_suit_amounts(&mut self) {
         let mut amounts: [usize; 4] = [0; 4];
-        
-        self.cards.iter().for_each(|c| amounts[c.suit as usize] += 1);
 
-        self.suit_amounts = amounts;        
+        self.cards
+            .iter()
+            .for_each(|c| amounts[c.suit as usize] += 1);
+
+        self.suit_amounts = amounts;
     }
 
     pub fn get_suit_amount(&self, suit: &Suit) -> usize {
@@ -280,7 +279,7 @@ impl Deck {
 
     pub fn select_right(&mut self) {
         let coor = self.selected_to_coordinate();
-        
+
         let mut new_x = coor.1 + 1;
 
         new_x %= self.suit_amounts[coor.0];
@@ -290,10 +289,10 @@ impl Deck {
 
     pub fn select_left(&mut self) {
         let coor = self.selected_to_coordinate();
-        
+
         if coor.1 == 0 {
-            self.coordinate_to_selected((coor.0, self.suit_amounts[coor.0]-1));
-            return
+            self.coordinate_to_selected((coor.0, self.suit_amounts[coor.0] - 1));
+            return;
         }
 
         let mut new_x = coor.1 - 1;
@@ -305,11 +304,10 @@ impl Deck {
 
     pub fn select_up(&mut self) {
         let coor = self.selected_to_coordinate();
-        
+
         let mut new_y = coor.0;
         // loop until another suit is found that has at least one card
         loop {
-
             new_y += 3;
             new_y %= 4;
 
@@ -325,7 +323,7 @@ impl Deck {
 
     pub fn select_down(&mut self) {
         let coor = self.selected_to_coordinate();
-        
+
         let mut new_y = coor.0;
         // loop until another suit is found that has at least one card
         loop {
@@ -351,14 +349,13 @@ impl Default for Deck {
 
 impl fmt::Display for Deck {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        
         // do not show an empty deck!
         if self.size() == 0 {
-            return write!(f, "  Empty")
+            return write!(f, "  Empty");
         }
 
         write!(f, "\x1b[2m╭╴\x1b[0m")?;
-        
+
         let mut current_suit = self.cards[0].suit;
 
         for card in &self.cards {
@@ -379,6 +376,20 @@ impl fmt::Display for Deck {
     }
 }
 
+impl Iterator for Deck {
+    type Item = Card;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.curr == self.cards.len() {
+            return None;
+        }
+        let current = &self.cards[self.curr];
+        self.curr += 1;
+
+        Some(current.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,8 +403,8 @@ mod tests {
     #[test]
     fn test_highest_one_suit() {
         let deck = init_deck();
-        
-        let available: &[CardID] = &[0,1,2,3,4,5,6,7,8,9,10,11,12];
+
+        let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
         assert_eq!(deck.highest(available, &Suit::Hearts), 12);
     }
@@ -402,7 +413,7 @@ mod tests {
     fn test_highest_mult_suits() {
         let deck = init_deck();
 
-        let available: &[CardID] = &[0,1,2,3,4,5,6,7,8,9,10,11,12,24];
+        let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24];
 
         assert_eq!(deck.highest(available, &Suit::Hearts), 24);
     }
@@ -411,7 +422,7 @@ mod tests {
     fn test_highest_trump() {
         let deck = init_deck();
 
-        let available: &[CardID] = &[0,1,2,3,12,37];
+        let available: &[CardID] = &[0, 1, 2, 3, 12, 37];
 
         assert_eq!(deck.highest(available, &Suit::Hearts), 37);
     }
@@ -428,9 +439,21 @@ mod tests {
         let mut deck = init_deck();
         let pulled = deck.pull_cards(12);
 
-        assert_eq!(deck.get_suit_amount(&Suit::Diamonds), 13 - pulled.get_suit_amount(&Suit::Diamonds));
-        assert_eq!(deck.get_suit_amount(&Suit::Hearts), 13 - pulled.get_suit_amount(&Suit::Hearts));
-        assert_eq!(deck.get_suit_amount(&Suit::Spades), 13 - pulled.get_suit_amount(&Suit::Spades));
-        assert_eq!(deck.get_suit_amount(&Suit::Clubs), 13 - pulled.get_suit_amount(&Suit::Clubs));
+        assert_eq!(
+            deck.get_suit_amount(&Suit::Diamonds),
+            13 - pulled.get_suit_amount(&Suit::Diamonds)
+        );
+        assert_eq!(
+            deck.get_suit_amount(&Suit::Hearts),
+            13 - pulled.get_suit_amount(&Suit::Hearts)
+        );
+        assert_eq!(
+            deck.get_suit_amount(&Suit::Spades),
+            13 - pulled.get_suit_amount(&Suit::Spades)
+        );
+        assert_eq!(
+            deck.get_suit_amount(&Suit::Clubs),
+            13 - pulled.get_suit_amount(&Suit::Clubs)
+        );
     }
 }

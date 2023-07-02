@@ -17,7 +17,8 @@ pub struct Player {
 impl Player {
     /// Create a new player, pulling `amount` cards from `deck`
     pub fn new_take_cards(deck: &mut Deck, amount: usize) -> Player {
-        let pulled = deck.pull_cards(amount);
+        let mut pulled = deck.pull_cards(amount);
+        pulled.sort();
         Player { cards: pulled }
     }
 

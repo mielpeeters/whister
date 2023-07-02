@@ -7,9 +7,13 @@ use crate::{
     fortify::GameState,
     player::Player,
     show,
-    suit::Suit,
+    suit::{Suit},
 };
-use std::io::{stdin, stdout, Write};
+use itertools::Itertools;
+use std::{
+    cmp::Ordering,
+    io::{stdin, stdout, Write},
+};
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
@@ -30,6 +34,8 @@ pub struct Game {
     scores: [u32; 4],
     human_players: usize,
     wait: bool,
+    round_scores: [u32; 4],
+    gone_cards: [[bool; 13]; 4],
 }
 
 impl Default for Game {
@@ -63,6 +69,8 @@ impl Game {
             scores,
             human_players: 0,
             wait: true,
+            round_scores: [0; 4],
+            gone_cards: [[false; 13]; 4],
         }
     }
 
@@ -82,22 +90,40 @@ impl Game {
         let tricks: Vec<Deck> = Vec::new();
         self.tricks = tricks;
 
+        self.round_scores
+            .iter()
+            .enumerate()
+            .for_each(|(plyr, score)| {
+                self.scores[plyr] += score;
+            });
+
+        self.round_scores = [0; 4];
+
         let cards = deck.pull_cards(13);
         self.players[0].cards = cards;
+        self.players[0].cards.sort();
 
         let cards = deck.pull_cards(13);
         self.players[1].cards = cards;
+        self.players[1].cards.sort();
 
         let cards = deck.pull_cards(13);
         self.players[2].cards = cards;
+        self.players[2].cards.sort();
 
         let cards = deck.pull_cards(13);
         self.players[3].cards = cards;
+        self.players[3].cards.sort();
     }
 
     pub fn trick(&mut self) -> Result<(), String> {
         if self.table.size() == 4 {
             let new_trick = self.table.pull_cards(4);
+
+            new_trick.cards.iter().for_each(|card| {
+                self.gone_cards[card.suit as usize][(card.score() - 2) as usize] = true;
+            });
+
             self.tricks.push(new_trick);
             Ok(())
         } else {
@@ -109,6 +135,7 @@ impl Game {
     /// Comsumes the card!
     fn play(&mut self, card: Card) -> Result<(), String> {
         if self.table.size() < 4 {
+            // add the card to the seen pile of cards (for AI card counting)
             self.table.add(card);
             Ok(())
         } else {
@@ -131,19 +158,7 @@ impl Game {
 
     /// returns the winning card index currently on the table
     fn winner(&self) -> PlayerID {
-        let mut best_card = self.table.card(0);
-        let mut winner = 0;
-
-        for i in 1..self.table.size() {
-            let new_card = self.table.card(i);
-
-            if new_card.better(best_card, &self.trump) {
-                best_card = new_card;
-                winner = i;
-            }
-        }
-
-        winner
+        self.table.cards.iter().position_max().unwrap()
     }
 
     /// returns a vector of alowed cards for this player, in this round
@@ -191,7 +206,9 @@ impl Game {
         playable
             .iter()
             .cloned()
-            .filter(|card| player.card(*card).better(best_on_table, &self.trump))
+            .filter(|card| {
+                player.card(*card).better(best_on_table, &self.trump) == Ordering::Greater
+            })
             .collect()
     }
 
@@ -203,13 +220,13 @@ impl Game {
         self.players[player].cards.lowest(out_of, &Suit::Hearts)
     }
 
-    pub fn of_which_trump(&self, player: PlayerID, out_of: &[CardID]) -> Vec<CardID> {
+    pub fn of_which_suit(&self, player: PlayerID, out_of: &[CardID], suit: usize) -> Vec<CardID> {
         let player = self.players.get(player).unwrap();
-        
+
         out_of
             .iter()
             .cloned()
-            .filter(|card| player.card(*card).suit == Suit::Hearts)
+            .filter(|card| player.card(*card).suit as usize == suit)
             .collect()
     }
 
@@ -339,10 +356,9 @@ impl Game {
         }
 
         self.turn = (self.winner() + self.turn) % 4;
-        self.scores[self.turn] += 1;
+        self.round_scores[self.turn] += 1;
 
         show::winner(self.turn);
-
         show::wait();
 
         self.trick().expect("Couldn't play trick in play_round");
@@ -363,7 +379,7 @@ impl Game {
         }
 
         self.turn = (self.winner() + self.turn) % 4;
-        self.scores[self.turn] += 1;
+        self.round_scores[self.turn] += 1;
         self.trick().expect("Couldn't play trick in play_round");
 
         if self.tricks.len() == 13 {
@@ -383,11 +399,16 @@ impl Game {
 
     pub fn agent_plays_round_slowly(&mut self, card: CardID) {
         self.players[0].cards.set_selected(card);
-        self.show_player_state(0);
-        show::wait();
-        
+
         let mut plyr = 0;
 
+        self.show_player_state(0);
+        // show::wait();
+
+        println!(
+            "agent played card {}",
+            self.players.get(0).unwrap().card(card)
+        );
         self.play_card(plyr, card);
 
         loop {
@@ -397,12 +418,10 @@ impl Game {
 
             plyr += 1;
             self.play_easy(plyr);
-            self.show_player_state(0);
-            show::wait();
         }
 
         self.turn = (self.winner() + self.turn) % 4;
-        self.scores[self.turn] += 1;
+        self.round_scores[self.turn] += 1;
         self.trick().expect("Couldn't play trick in play_round");
 
         if self.tricks.len() == 13 {
@@ -416,22 +435,27 @@ impl Game {
             }
 
             self.play_easy(plyr);
-            self.show_player_state(0);
-            show::wait();
-
             plyr += 1;
         }
+
+        // self.show_player_state(0);
     }
 
     pub fn show_scores(&self) {
         println!("The scores: {:?}", self.scores);
     }
 
-    pub fn reward(&self) -> u32 {
+    pub fn reward(&self) -> f64 {
+        let mut factor: f64 = 1.0;
+
+        if self.tricks.is_empty() && 0 == self.round_scores.iter().position_max().unwrap() {
+            factor = 10.0;
+        }
+
         if self.turn == 0 {
-            10
+            1.0 * factor
         } else {
-            0
+            0.0
         }
     }
 
@@ -451,6 +475,10 @@ impl Game {
         self.table.size() == 0
     }
 
+    pub fn show_gone(&self) {
+        println!("Gone Cards:\n{:?}", self.gone_cards);
+    }
+
     pub fn state(&self) -> GameState {
         let can_follow: bool = self.can_follow(0);
         let nb_trump = self
@@ -459,14 +487,36 @@ impl Game {
             .unwrap()
             .cards
             .get_suit_amount(&Suit::Hearts);
-        
+
         let first = self.first();
 
+        let mut has_highest = [true; 4];
+        let mut first_suit = -1;
+
+        if !first {
+            let first_card_suit = self.table.card(0).suit;
+            first_suit = first_card_suit as i8;
+        }
+
+        for s in Suit::iterator() {
+            let suit_deck = self.players[0].cards.get_deck_of_suit(s);
+            if let Some(my_highest) = suit_deck.cards.iter().max() {
+                for i in my_highest.score()..14 {
+                    if !self.gone_cards[*s as usize][(i - 2) as usize] {
+                        has_highest[*s as usize] = false;
+                    }
+                }
+            } else {
+                has_highest[*s as usize] = false;
+            }
+        }
+
         GameState {
-            has_trump: self.players[0].can_follow(Suit::Hearts),
             can_follow,
             nb_trump,
-            first
+            first,
+            has_highest,
+            first_suit,
         }
     }
 }
