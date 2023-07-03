@@ -7,11 +7,13 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
-use crate::{deck::CardID, suit::Suit};
 use crate::game::Game;
+use crate::{deck::CardID, suit::Suit};
+use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
-use rand::{Rng};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::cmp::max;
 use std::{cmp::Ordering, collections::HashMap, fmt::Display};
 
 /// All possible actions that the agent can take.
@@ -35,28 +37,30 @@ pub enum Action {
     PlayBest,
     /// come out with a card you know is the best
     ComeBest,
+    /// play the worst card of the least-populated set that isn't trumps
+    PlaySmall,
 }
 
 const GROUP_SIZE: usize = 3;
-const EXPLORE: u8 = 30;
+const MIN_EXPLORE: u64 = 30;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct GameState {
     pub can_follow: bool,
-    pub nb_trump: usize,
-    pub first: bool,
+    pub have_higher: bool,
     pub first_suit: i8,
-    pub has_highest: [bool; 4]
+    pub has_highest: [bool; 4],
+    pub have_trump: bool,
 }
 
 impl GameState {
     pub fn new() -> GameState {
         GameState {
             can_follow: true,
-            nb_trump: 13,
-            first: true,
+            have_higher: true,
             first_suit: 0,
-            has_highest: [false; 4]
+            has_highest: [false; 4],
+            have_trump: true,
         }
     }
 }
@@ -76,23 +80,38 @@ pub struct QLearner {
     pub initial_value: f64,
     pub iterations: u64,
     pub game: Game,
+    current_iter: u64,
 }
 
 impl QLearner {
     pub fn new(game: Game) -> Self {
         let q = HashMap::new();
+
         QLearner {
             q,
-            rate: 0.1,
+            rate: 0.05,
             discount: 0.8,
-            initial_value: 0.0,
+            initial_value: 0.5,
             iterations: 100000,
             game,
+            current_iter: 0,
         }
     }
 
+    pub fn new_with_iter(game: Game, iter: u64) -> Self {
+        let mut learner = Self::new(game);
+        learner.iterations = iter;
+        learner
+    }
+
     pub fn train(&mut self) {
-        let mut count = 0;
+        let pb = ProgressBar::new(self.iterations);
+        pb.set_style(
+            ProgressStyle::with_template("  {bar:40.green/black}   {pos} / {len}   eta: {eta}")
+                .unwrap()
+                .progress_chars("━━─"),
+        );
+
         loop {
             let current_state = self.game.state();
             let current_values = self.q.get(&current_state).unwrap_or(&HashMap::new());
@@ -123,16 +142,16 @@ impl QLearner {
                 .or_insert_with(HashMap::new)
                 .insert(action, v);
 
-            count += 1;
+            self.current_iter += 1;
+            pb.inc(1);
 
-            if count > self.iterations {
+            if self.current_iter >= self.iterations {
                 break;
             }
-            print!("\x1b[2K\x1b[0G iteration {} / {}", count, self.iterations);
         }
 
-        println!("\nThere are {:?} states that have been explored...", self.q.len());
-        
+        pb.finish();
+
         // self.show_result();
         // self.save_result();
     }
@@ -154,12 +173,18 @@ impl QLearner {
         let alowed = self.alowed_actions(&self.game);
 
         let exploit_factor = rand::thread_rng().gen_range(0..100);
-        
+
+        let explore_factor: f64 =
+            100.0 * (self.iterations as f64 - self.current_iter as f64) / (self.iterations as f64);
+
         let best = self.best_action_score(state);
 
-        if alowed.contains(best.0) && exploit_factor > EXPLORE {
-            return *best.0
+        if alowed.contains(best.0) && exploit_factor > max(explore_factor as u64, MIN_EXPLORE) {
+            // EXPLOIT
+            return *best.0;
         }
+
+        // EXPLORE
 
         let num = rand::thread_rng().gen_range(0..alowed.len());
 
@@ -169,23 +194,29 @@ impl QLearner {
     pub fn alowed_actions(&self, game: &Game) -> Vec<Action> {
         let playable = game.alowed_cards(0);
         let better = game.better_cards_of(0, &playable);
-
-        let mut alowed: Vec<Action> = Vec::new();
-        alowed.push(Action::PlayWorst);
-        alowed.push(Action::PlayBest);
-        // alowed.push(Action::Random);
-
         let state = game.state();
-        if state.first && state.has_highest.iter().any(|highest| *highest) {
-            alowed.push(Action::ComeBest);
+        let mut alowed: Vec<Action> = Vec::new();
+        let first: bool = state.first_suit == -1;
+
+        if !first {
+            alowed.push(Action::PlayWorst);
+            alowed.push(Action::PlaySmall);
         }
 
-        if game.players[0].can_follow(Suit::Hearts) && (game.first() || !game.can_follow(0)) {
+        if first {
+            alowed.push(Action::PlayWorst);
+            alowed.push(Action::PlaySmall);
+            if state.has_highest.iter().any(|highest| *highest) {
+                alowed.push(Action::ComeBest);
+            }
+        }
+
+        if game.players[0].can_follow(Suit::Hearts) && (first || !game.can_follow(0)) {
             alowed.push(Action::TrumpHigh);
             alowed.push(Action::TrumpLow);
         }
 
-        if game.can_follow(0) && !better.is_empty() && !state.first {
+        if game.can_follow(0) && !better.is_empty() && !first {
             alowed.push(Action::RaiseLow);
             alowed.push(Action::RaiseHigh);
         }
@@ -202,9 +233,7 @@ impl QLearner {
         let playable = game.alowed_cards(0);
 
         match action {
-            Action::PlayWorst => {
-                game.lowest_card_of(0, &playable)
-            }
+            Action::PlayWorst => game.lowest_card_of(0, &playable),
             Action::RaiseLow => {
                 let better = game.better_cards_of(0, &playable);
                 game.lowest_card_of(0, &better)
@@ -225,16 +254,30 @@ impl QLearner {
                 let rnd = rand::thread_rng().gen_range(0..playable.len());
                 playable[rnd]
             }
-            Action::PlayBest => {
-                game.highest_card_of(0, &playable)
-            },
+            Action::PlayBest => game.highest_card_of(0, &playable),
             Action::ComeBest => {
                 let state = game.state();
                 let suit = state.has_highest.iter().position_max().unwrap();
                 let suit_ids = game.of_which_suit(0, &playable, suit);
 
                 game.highest_card_of(0, &suit_ids)
-            },
+            }
+            Action::PlaySmall => {
+                let least_suit = Suit::iterator()
+                    .cloned()
+                    .filter(|s| *s != Suit::Hearts)
+                    .filter(|s| game.players[0].cards.get_suit_amount(s) != 0)
+                    .min_by_key(|s| game.players[0].cards.get_suit_amount(s))
+                    .unwrap_or(Suit::Clubs);
+
+                let least_suit_cards = game.of_which_suit(0, &playable, least_suit as usize);
+
+                if !least_suit_cards.is_empty() {
+                    game.lowest_card_of(0, &least_suit_cards)
+                } else {
+                    playable[0]
+                }
+            }
         }
     }
 
@@ -276,9 +319,10 @@ impl Display for GameState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "has_highest: {:?}", self.has_highest)?;
         writeln!(f, "can_follow: {}", self.can_follow)?;
-        writeln!(f, "first: {}", self.first)?;
-        writeln!(f, "first_suit: {}", self.first_suit)?;
-        write!(f, "nb_trump: {}", self.nb_trump)
+        writeln!(f, "have_higher: {}", self.have_higher)?;
+        writeln!(f, "have_trump: {}", self.have_trump)?;
+        write!(f, "first_suit: {}", self.first_suit)
+        // write!(f, "nb_trump: {}", self.nb_trump)
     }
 }
 
@@ -293,6 +337,7 @@ impl Display for Action {
             Action::Random => write!(f, "Random"),
             Action::PlayBest => write!(f, "PlayBest"),
             Action::ComeBest => write!(f, "ComeBest"),
+            Action::PlaySmall => write!(f, "PlaySmall"),
         }
     }
 }

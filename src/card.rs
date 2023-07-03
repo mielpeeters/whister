@@ -26,6 +26,8 @@ impl Card {
             self.cmp(other)
         } else if self.suit == *trump {
             Ordering::Greater
+        } else if other.suit == *trump {
+            Ordering::Less
         } else {
             self.score().cmp(&other.score())
         }
@@ -63,6 +65,15 @@ impl fmt::Display for Card {
         };
 
         write!(f, "\x1b[47;30m{}{}", nb, self.suit)
+    }
+}
+
+impl Default for Card {
+    fn default() -> Self {
+        Card {
+            suit: Suit::Hearts,
+            number: 1,
+        }
     }
 }
 

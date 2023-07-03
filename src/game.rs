@@ -7,7 +7,7 @@ use crate::{
     fortify::GameState,
     player::Player,
     show,
-    suit::{Suit},
+    suit::Suit,
 };
 use itertools::Itertools;
 use std::{
@@ -90,6 +90,8 @@ impl Game {
         let tricks: Vec<Deck> = Vec::new();
         self.tricks = tricks;
 
+        self.gone_cards = [[false; 13]; 4];
+
         self.round_scores
             .iter()
             .enumerate()
@@ -158,7 +160,17 @@ impl Game {
 
     /// returns the winning card index currently on the table
     fn winner(&self) -> PlayerID {
-        self.table.cards.iter().position_max().unwrap()
+        self.table.cards.iter().cloned().position_max_by(|card1, card2| {
+            if card1.suit == card2.suit {
+                card1.cmp(card2)
+            } else if card1.suit == Suit::Hearts {
+                Ordering::Greater
+            } else if card2.suit == Suit::Hearts {
+                Ordering::Less
+            } else {
+                Ordering::Greater
+            }
+        }).unwrap()
     }
 
     /// returns a vector of alowed cards for this player, in this round
@@ -446,14 +458,8 @@ impl Game {
     }
 
     pub fn reward(&self) -> f64 {
-        let mut factor: f64 = 1.0;
-
-        if self.tricks.is_empty() && 0 == self.round_scores.iter().position_max().unwrap() {
-            factor = 10.0;
-        }
-
         if self.turn == 0 {
-            1.0 * factor
+            1.0
         } else {
             0.0
         }
@@ -481,29 +487,34 @@ impl Game {
 
     pub fn state(&self) -> GameState {
         let can_follow: bool = self.can_follow(0);
-        let nb_trump = self
-            .players
-            .get(0)
-            .unwrap()
-            .cards
-            .get_suit_amount(&Suit::Hearts);
-
-        let first = self.first();
 
         let mut has_highest = [true; 4];
         let mut first_suit = -1;
+        let mut have_higher = true;
+        let have_trump = self.players[0].can_follow(Suit::Hearts);
 
-        if !first {
+        if !self.first() {
             let first_card_suit = self.table.card(0).suit;
             first_suit = first_card_suit as i8;
+
+            // determine whether I can go higher than the current winner
+            let playable = self.alowed_cards(0);
+
+            let winner = self.winner();
+
+            have_higher = playable.iter().any(|card_id| {
+                *self.players[0].card(*card_id) > self.table.cards[winner]
+            });
         }
 
         for s in Suit::iterator() {
-            let suit_deck = self.players[0].cards.get_deck_of_suit(s);
-            if let Some(my_highest) = suit_deck.cards.iter().max() {
-                for i in my_highest.score()..14 {
+            let ai_suit_deck = self.players[0].cards.get_deck_of_suit(s);
+
+            if let Some(my_highest) = ai_suit_deck.cards.iter().max() {
+                for i in (my_highest.score()+1)..15 {
                     if !self.gone_cards[*s as usize][(i - 2) as usize] {
                         has_highest[*s as usize] = false;
+                        break;
                     }
                 }
             } else {
@@ -511,12 +522,13 @@ impl Game {
             }
         }
 
+
         GameState {
             can_follow,
-            nb_trump,
-            first,
             has_highest,
             first_suit,
+            have_higher,
+            have_trump
         }
     }
 }
