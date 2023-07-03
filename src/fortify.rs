@@ -14,6 +14,8 @@ use itertools::Itertools;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
+use std::fs::File;
+use std::io::{Write, BufReader, Read};
 use std::{cmp::Ordering, collections::HashMap, fmt::Display};
 
 /// All possible actions that the agent can take.
@@ -151,9 +153,6 @@ impl QLearner {
         }
 
         pb.finish();
-
-        // self.show_result();
-        // self.save_result();
     }
 
     /// determine the best action in current state, based on the q function
@@ -200,7 +199,9 @@ impl QLearner {
 
         if !first {
             alowed.push(Action::PlayWorst);
-            alowed.push(Action::PlaySmall);
+            if !game.can_follow(0) {
+                alowed.push(Action::PlaySmall);
+            }
         }
 
         if first {
@@ -297,15 +298,31 @@ impl QLearner {
         }
     }
 
-    // fn save_result(&self) {
-    //     let serialized = serde_json::to_string(&self.q).unwrap();
+    pub fn save_result(&self, path: String) {
+        let serialized = serde_pickle::to_vec(&self.q, Default::default()).unwrap();
 
-    //     let mut file = match File::create("model.json") {
-    //         Ok(it) => it,
-    //         Err(err) => return,
-    //     };
-    //     file.write_all(serialized.as_bytes()).unwrap();
-    // }
+        let mut file = match File::create(path) {
+            Ok(it) => it,
+            Err(err) => return,
+        };
+        file.write_all(serialized.as_slice()).unwrap();
+    }
+
+    pub fn import_from_model(&mut self, path: String) {
+        let file = match File::open(path) {
+            Ok(it) => it,
+            Err(err) => return,
+        };
+
+        let mut reader = BufReader::new(file);
+        let mut serialized = Vec::new();
+
+        reader.read_to_end(&mut serialized).unwrap();
+
+        let deserialized: Q = serde_pickle::from_slice(&serialized, Default::default()).unwrap();
+
+        self.q = deserialized;
+    }
 }
 
 impl Default for QLearner {
