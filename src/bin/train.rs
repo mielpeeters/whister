@@ -1,7 +1,7 @@
 use text_io::read;
 use whister::{
     card::Card,
-    fortify::{GameState, QLearner},
+    fortify_old::{GameState, QLearner},
     game::Game,
 };
 

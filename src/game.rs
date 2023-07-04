@@ -4,7 +4,7 @@
 use crate::{
     card::Card,
     deck::{CardID, Deck},
-    fortify::{GameState, QLearner},
+    fortify_old::{GameState, QLearner},
     player::Player,
     show,
     suit::Suit,
@@ -230,23 +230,40 @@ impl Game {
             .collect()
     }
 
-    // fn play_easy(&mut self, player: PlayerID) {
-    //     // get alowed indeces
-    //     let playable = self.alowed_cards(player);
+    fn play_easy(&mut self, player: PlayerID) {
+        // get alowed indeces
+        let playable = self.alowed_cards(player);
 
-    //     if self.table.is_empty() {
-    //         return self.play_card(player, self.highest_card_of(player, &playable).unwrap_or(playable[0]));
-    //     }
+        if self.table.is_empty() {
+            return self
+                .player_plays(
+                    player,
+                    self.highest_card_of(player, &playable)
+                        .unwrap_or(playable[0]),
+                )
+                .expect("test");
+        }
 
-    //     let better_cards = self.better_cards_of(player, &playable);
+        let better_cards = self.better_cards_of(player, &playable);
 
-    //     if !better_cards.is_empty() {
-    //         return self.play_card(player, self.lowest_card_of(player, &better_cards).unwrap_or(better_cards[0]));
-    //     }
+        if !better_cards.is_empty() {
+            return self
+                .player_plays(
+                    player,
+                    self.lowest_card_of(player, &better_cards)
+                        .unwrap_or(better_cards[0]),
+                )
+                .expect("test");
+        }
 
-    //     // play other card
-    //     self.play_card(player, self.lowest_card_of(player, &playable).unwrap_or(playable[0]));
-    // }
+        // play other card
+        self.player_plays(
+            player,
+            self.lowest_card_of(player, &playable)
+                .unwrap_or(playable[0]),
+        )
+        .expect("test");
+    }
 
     fn input_instructions(&self) {
         println!("Press the arrow or vim keys to move the selected card.");
@@ -357,11 +374,11 @@ impl Game {
     }
 
     /// a simple rule based AI plays a card given the current situation.
-    // fn rulebased_plays(&mut self, player: PlayerID) {
-    //     self.play_easy(player);
+    fn rulebased_plays(&mut self, player: PlayerID) {
+        self.play_easy(player);
 
-    //     show::show_table_wait(&self.table);
-    // }
+        // show::show_table_wait(&self.table);
+    }
 
     pub fn play_round(&mut self, learner: &mut QLearner) {
         for i in self.turn..self.turn + 4 {
@@ -415,6 +432,40 @@ impl Game {
             }
 
             self.ai_plays(plyr, learner, false);
+            plyr += 1;
+        }
+    }
+
+    pub fn agent_plays_round_easy(&mut self, card: CardID) {
+        let mut plyr = 0;
+
+        self.player_plays(plyr, card)
+            .expect("agent should be alowed to play selected card");
+
+        loop {
+            if self.table.size() == 4 {
+                break;
+            }
+
+            plyr += 1;
+            self.rulebased_plays(plyr);
+        }
+
+        self.turn = (self.winner() + self.turn) % 4;
+        self.round_scores[self.turn] += 1;
+        self.trick().expect("Couldn't play trick in play_round");
+
+        if self.tricks.len() == 13 {
+            self.new_round();
+        }
+
+        plyr = self.turn;
+        loop {
+            if plyr % 4 == 0 {
+                break;
+            }
+
+            self.rulebased_plays(plyr);
             plyr += 1;
         }
     }

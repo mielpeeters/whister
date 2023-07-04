@@ -2,7 +2,7 @@
 This crate implements an AI which plays Colour Whist (nl: Kleurenwiezen).
 */
 use whister::{
-    game::Game, fortify::QLearner
+    game::Game, fortify_old::QLearner
 };
 use text_io::read;
 
