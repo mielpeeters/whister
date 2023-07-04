@@ -242,23 +242,23 @@ impl Game {
             .collect()
     }
 
-    fn play_easy(&mut self, player: PlayerID) {
-        // get alowed indeces
-        let playable = self.alowed_cards(player);
+    // fn play_easy(&mut self, player: PlayerID) {
+    //     // get alowed indeces
+    //     let playable = self.alowed_cards(player);
 
-        if self.table.size() == 0 {
-            return self.play_card(player, self.highest_card_of(player, &playable).unwrap_or(playable[0]));
-        }
+    //     if self.table.size() == 0 {
+    //         return self.play_card(player, self.highest_card_of(player, &playable).unwrap_or(playable[0]));
+    //     }
 
-        let better_cards = self.better_cards_of(player, &playable);
+    //     let better_cards = self.better_cards_of(player, &playable);
 
-        if !better_cards.is_empty() {
-            return self.play_card(player, self.lowest_card_of(player, &better_cards).unwrap_or(better_cards[0]));
-        }
+    //     if !better_cards.is_empty() {
+    //         return self.play_card(player, self.lowest_card_of(player, &better_cards).unwrap_or(better_cards[0]));
+    //     }
 
-        // play other card
-        self.play_card(player, self.lowest_card_of(player, &playable).unwrap_or(playable[0]));
-    }
+    //     // play other card
+    //     self.play_card(player, self.lowest_card_of(player, &playable).unwrap_or(playable[0]));
+    // }
 
     fn input_instructions(&self) {
         println!("Press the arrow or vim keys to move the selected card.");
@@ -350,7 +350,7 @@ impl Game {
     }
 
     fn ai_plays(&mut self, player: PlayerID, learner: &mut QLearner, slow: bool) {
-        let mut best_action = *learner.best_action_score(&self.state()).0;
+        let mut best_action = *learner.best_action_score(&self.state(player)).0;
         let alowed = learner.alowed_actions(self, player);
 
         if !alowed.iter().any(|a| *a == best_action) {
@@ -429,13 +429,10 @@ impl Game {
         }
     }
 
-    pub fn agent_plays_round_slowly(&mut self, card: CardID) {
+    pub fn agent_plays_round_slowly(&mut self, card: CardID, learner: &mut QLearner) {
         self.players[0].cards.set_selected(card);
 
         let mut plyr = 0;
-
-        self.show_player_state(0);
-        // show::wait();
 
         println!(
             "agent played card {}",
@@ -449,7 +446,7 @@ impl Game {
             }
 
             plyr += 1;
-            self.play_easy(plyr);
+            self.ai_plays(plyr, learner, true);
         }
 
         self.turn = (self.winner() + self.turn) % 4;
@@ -466,7 +463,7 @@ impl Game {
                 break;
             }
 
-            self.play_easy(plyr);
+            self.ai_plays(plyr, learner, true);
             plyr += 1;
         }
 
@@ -505,30 +502,30 @@ impl Game {
         println!("Gone Cards:\n{:?}", self.gone_cards);
     }
 
-    pub fn state(&self) -> GameState {
-        let can_follow: bool = self.can_follow(0);
+    pub fn state(&self, player: PlayerID) -> GameState {
+        let can_follow: bool = self.can_follow(player);
 
         let mut has_highest = [true; 4];
         let mut first_suit = -1;
         let mut have_higher = true;
-        let have_trump = self.players[0].can_follow(Suit::Hearts);
+        let have_trump = self.players[player].can_follow(Suit::Hearts);
 
         if !self.first() {
             let first_card_suit = self.table.card(0).suit;
             first_suit = first_card_suit as i8;
 
             // determine whether I can go higher than the current winner
-            let playable = self.alowed_cards(0);
+            let playable = self.alowed_cards(player);
 
             let winner = self.winner();
 
             have_higher = playable.iter().any(|card_id| {
-                *self.players[0].card(*card_id) > self.table.cards[winner]
+                *self.players[player].card(*card_id) > self.table.cards[winner]
             });
         }
 
         for s in Suit::iterator() {
-            let ai_suit_deck = self.players[0].cards.get_deck_of_suit(s);
+            let ai_suit_deck = self.players[player].cards.get_deck_of_suit(s);
 
             if let Some(my_highest) = ai_suit_deck.cards.iter().max() {
                 for i in (my_highest.score()+1)..15 {

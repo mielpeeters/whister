@@ -78,7 +78,7 @@ pub struct QLearner {
     pub iterations: u64,
     pub game: Game,
     current_iter: u64,
-    opponent: usize
+    opponent: String
 }
 
 impl QLearner {
@@ -93,7 +93,7 @@ impl QLearner {
             iterations: 100000,
             game,
             current_iter: 0,
-            opponent: 0,
+            opponent: "".to_string(),
         }
     }
 
@@ -101,6 +101,10 @@ impl QLearner {
         let mut learner = Self::new(game);
         learner.iterations = iter;
         learner
+    }
+
+    pub fn set_opponent(&mut self, opponent: String) {
+        self.opponent = opponent;
     }
 
     pub fn train(&mut self) {
@@ -112,12 +116,13 @@ impl QLearner {
         );
 
         let mut opponent = QLearner::new(Game::new());
-        if self.opponent == 1 {
-            opponent.import_from_model("whister.pkl".to_string(), false);
+        if !self.opponent.is_empty() {
+            println!("IMPORTING \x1b[1m{}\x1b[0m", self.opponent);
+            opponent.import_from_model(self.opponent.clone(), false);
         }
 
         loop {
-            let current_state = self.game.state();
+            let current_state = self.game.state(0);
 
             // determine a new action to take, from current state
             let action = self.new_action(&current_state);
@@ -126,7 +131,7 @@ impl QLearner {
 
             // reward is the reward that's coupled with this action
             let reward = self.game.reward();
-            let best_future = *self.best_action_score(&self.game.state()).1;
+            let best_future = *self.best_action_score(&self.game.state(0)).1;
 
             // new value to assign to Q(s,a)
             let v: f64 = {
@@ -194,7 +199,7 @@ impl QLearner {
     pub fn alowed_actions(&self, game: &Game, player: usize) -> Vec<Action> {
         let playable = game.alowed_cards(player);
         let better = game.better_cards_of(player, &playable);
-        let state = game.state();
+        let state = game.state(player);
         let mut alowed: Vec<Action> = Vec::new();
         let first: bool = state.first_suit == -1;
 
@@ -254,7 +259,7 @@ impl QLearner {
             }
             Action::PlayBest => game.highest_card_of(player, &playable).unwrap_or(playable[0]),
             Action::ComeBest => {
-                let state = game.state();
+                let state = game.state(player);
                 let suit = state.has_highest.iter().position_max().unwrap();
                 let suit_ids = game.of_which_suit(player, &playable, suit);
 
@@ -312,7 +317,10 @@ impl QLearner {
     pub fn import_from_model(&mut self, path: String, reduced: bool) {
         let file = match File::open(path) {
             Ok(it) => it,
-            Err(_) => return,
+            Err(_) => {
+                println!("\x1b[91mCouldn't import that model...\x1b[0m");
+                return
+            },
         };
 
         let mut reader = BufReader::new(file);
