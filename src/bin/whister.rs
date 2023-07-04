@@ -19,7 +19,7 @@ fn main() {
         println!("Insert model name [modelname/n]");
         let from_model: String = read!();
         let mut learner = QLearner::new(Game::new());
-        learner.import_from_model(from_model, true);
+        learner.import_from_model(from_model, false);
 
         loop {
             for _ in 0..13 {
@@ -129,6 +129,6 @@ fn main() {
             return
         }
 
-        learner.save_result(answer, true); 
+        learner.save_result(answer, false); 
     } 
 }
