@@ -21,7 +21,7 @@ fn main() {
         let from_model: String = read!();
         if from_model != "n" {
             learner = QLearner::new(Game::new());
-            learner.import_from_model(from_model.clone());
+            learner.import_from_model(from_model.clone(), true);
         } else {
             println!("how many iterations?");
             let iterations: u64 = read!();
@@ -97,7 +97,7 @@ fn main() {
         if answer == "n" {
             return
         }
-        learner.save_result(answer);
+        learner.save_result(answer, true);
         
         return 
     } 

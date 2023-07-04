@@ -12,7 +12,8 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::fs::File;
-use std::io::{Write, BufReader, Read};
+use std::hash::Hash;
+use std::io::{BufReader, Read, Write};
 use std::{cmp::Ordering, collections::HashMap, fmt::Display};
 
 /// All possible actions that the agent can take.
@@ -277,17 +278,53 @@ impl QLearner {
         }
     }
 
-    pub fn save_result(&self, path: String) {
-        let serialized = serde_pickle::to_vec(&self.q, Default::default()).unwrap();
+    fn q_to_optimal(&self) -> HashMap<GameState, Action> {
+        let mut optimal_action = HashMap::new();
+        self.q.iter().for_each(|test| {
+            optimal_action.insert(
+                *test.0,
+                *self
+                    .q
+                    .get(test.0)
+                    .unwrap()
+                    .iter()
+                    .max_by(|score1, score2| score1.partial_cmp(score2).unwrap())
+                    .unwrap()
+                    .0,
+            );
+        });
+
+        optimal_action
+    }
+
+    fn optimal_to_q(&mut self, optimal: HashMap<GameState, Action>) {
+        self.q = HashMap::new();
+
+        optimal.iter().for_each(|state_action| {
+            let mut action_value = HashMap::new();
+            action_value.insert(*state_action.1, 10.0);
+            self.q.insert(*state_action.0, action_value);
+        });
+    }
+
+    pub fn save_result(&self, path: String, reduced: bool) {
+        let serialized = match reduced {
+            true => {
+                let optimal = self.q_to_optimal();
+                serde_pickle::to_vec(&optimal, Default::default()).unwrap()
+            }
+            false => serde_pickle::to_vec(&self.q, Default::default()).unwrap(),
+        };
 
         let mut file = match File::create(path) {
             Ok(it) => it,
             Err(_) => return,
         };
+
         file.write_all(serialized.as_slice()).unwrap();
     }
 
-    pub fn import_from_model(&mut self, path: String) {
+    pub fn import_from_model(&mut self, path: String, reduced: bool) {
         let file = match File::open(path) {
             Ok(it) => it,
             Err(_) => return,
@@ -298,9 +335,15 @@ impl QLearner {
 
         reader.read_to_end(&mut serialized).unwrap();
 
-        let deserialized: Q = serde_pickle::from_slice(&serialized, Default::default()).unwrap();
-
-        self.q = deserialized;
+        if reduced {
+            let deserialized: HashMap<GameState, Action> =
+                serde_pickle::from_slice(&serialized, Default::default()).unwrap();
+    
+            self.optimal_to_q(deserialized);
+        } else {
+            let deserialized: Q = serde_pickle::from_slice(&serialized, Default::default()).unwrap();
+            self.q = deserialized;
+        }
     }
 }
 
