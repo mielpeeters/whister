@@ -163,7 +163,7 @@ impl QLearner {
 
     /// determine the action the agent takes while exploring the statespace
     fn new_action(&mut self, state: &GameState) -> Action {
-        let alowed = self.alowed_actions(&self.game);
+        let alowed = self.alowed_actions(&self.game, 0);
 
         let exploit_factor = rand::thread_rng().gen_range(0..100);
 
@@ -184,9 +184,9 @@ impl QLearner {
         *alowed.get(num).unwrap()
     }
 
-    pub fn alowed_actions(&self, game: &Game) -> Vec<Action> {
-        let playable = game.alowed_cards(0);
-        let better = game.better_cards_of(0, &playable);
+    pub fn alowed_actions(&self, game: &Game, player: usize) -> Vec<Action> {
+        let playable = game.alowed_cards(player);
+        let better = game.better_cards_of(player, &playable);
         let state = game.state();
         let mut alowed: Vec<Action> = Vec::new();
         let first: bool = state.first_suit == -1;
@@ -202,12 +202,12 @@ impl QLearner {
             }
         }
 
-        if game.players[0].can_follow(Suit::Hearts) && (first || !game.can_follow(0)) {
+        if game.players[player].can_follow(Suit::Hearts) && (first || !game.can_follow(player)) {
             alowed.push(Action::TrumpHigh);
             alowed.push(Action::TrumpLow);
         }
 
-        if game.can_follow(0) && !better.is_empty() && !first {
+        if game.can_follow(player) && !better.is_empty() && !first {
             alowed.push(Action::RaiseLow);
             alowed.push(Action::RaiseHigh);
         }
@@ -216,42 +216,42 @@ impl QLearner {
     }
 
     fn take_action(&mut self, action: &Action) {
-        let card_id = self.action_card_id(action, &self.game);
+        let card_id = self.action_card_id(action, &self.game, 0);
         self.game.agent_plays_round(card_id);
     }
 
-    pub fn action_card_id(&self, action: &Action, game: &Game) -> CardID {
-        let playable = game.alowed_cards(0);
+    pub fn action_card_id(&self, action: &Action, game: &Game, player: usize) -> CardID {
+        let playable = game.alowed_cards(player);
 
         match action {
-            Action::PlayWorst => game.lowest_card_of(0, &playable),
+            Action::PlayWorst => game.lowest_card_of(player, &playable).unwrap_or(playable[0]),
             Action::RaiseLow => {
-                let better = game.better_cards_of(0, &playable);
-                game.lowest_card_of(0, &better)
+                let better = game.better_cards_of(player, &playable);
+                game.lowest_card_of(player, &better).unwrap_or(playable[0])
             }
             Action::RaiseHigh => {
-                let better = game.better_cards_of(0, &playable);
-                game.highest_card_of(0, &better)
+                let better = game.better_cards_of(player, &playable);
+                game.highest_card_of(player, &better).unwrap_or(playable[0])
             }
             Action::TrumpHigh => {
-                let trumps = game.of_which_suit(0, &playable, 3);
-                game.highest_card_of(0, &trumps)
+                let trumps = game.of_which_suit(player, &playable, 3);
+                game.highest_card_of(player, &trumps).unwrap_or(playable[0])
             }
             Action::TrumpLow => {
-                let trumps = game.of_which_suit(0, &playable, 3);
-                game.lowest_card_of(0, &trumps)
+                let trumps = game.of_which_suit(player, &playable, 3);
+                game.lowest_card_of(player, &trumps).unwrap_or(playable[0])
             }
             Action::Random => {
-                let rnd = rand::thread_rng().gen_range(0..playable.len());
+                let rnd = rand::thread_rng().gen_range(player..playable.len());
                 playable[rnd]
             }
-            Action::PlayBest => game.highest_card_of(0, &playable),
+            Action::PlayBest => game.highest_card_of(player, &playable).unwrap_or(playable[0]),
             Action::ComeBest => {
                 let state = game.state();
                 let suit = state.has_highest.iter().position_max().unwrap();
-                let suit_ids = game.of_which_suit(0, &playable, suit);
+                let suit_ids = game.of_which_suit(player, &playable, suit);
 
-                game.highest_card_of(0, &suit_ids)
+                game.highest_card_of(player, &suit_ids).unwrap_or(playable[0])
             }
         }
     }
@@ -327,8 +327,7 @@ impl QLearner {
 
 impl Default for QLearner {
     fn default() -> Self {
-        let game = Game::new();
-        Self::new(game)
+        Self::new(Game::new())
     }
 }
 

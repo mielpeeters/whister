@@ -4,7 +4,7 @@
 use crate::{
     card::Card,
     deck::{CardID, Deck},
-    fortify::GameState,
+    fortify::{GameState, QLearner},
     player::Player,
     show,
     suit::Suit,
@@ -224,11 +224,11 @@ impl Game {
             .collect()
     }
 
-    pub fn highest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> CardID {
+    pub fn highest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> Option<CardID> {
         self.players[player].cards.highest(out_of, &Suit::Hearts)
     }
 
-    pub fn lowest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> CardID {
+    pub fn lowest_card_of(&self, player: PlayerID, out_of: &[CardID]) -> Option<CardID> {
         self.players[player].cards.lowest(out_of, &Suit::Hearts)
     }
 
@@ -247,17 +247,17 @@ impl Game {
         let playable = self.alowed_cards(player);
 
         if self.table.size() == 0 {
-            return self.play_card(player, self.highest_card_of(player, &playable));
+            return self.play_card(player, self.highest_card_of(player, &playable).unwrap_or(playable[0]));
         }
 
         let better_cards = self.better_cards_of(player, &playable);
 
         if !better_cards.is_empty() {
-            return self.play_card(player, self.lowest_card_of(player, &better_cards));
+            return self.play_card(player, self.lowest_card_of(player, &better_cards).unwrap_or(better_cards[0]));
         }
 
         // play other card
-        self.play_card(player, self.lowest_card_of(player, &playable));
+        self.play_card(player, self.lowest_card_of(player, &playable).unwrap_or(playable[0]));
     }
 
     fn input_instructions(&self) {
@@ -349,7 +349,29 @@ impl Game {
         self.play_card(player, idx);
     }
 
-    pub fn play_round(&mut self) {
+    fn ai_plays(&mut self, player: PlayerID, learner: &mut QLearner) {
+        let mut best_action = *learner.best_action_score(&self.state()).0;
+        let alowed = learner.alowed_actions(self, player);
+
+        if !alowed.iter().any(|a| *a == best_action) {
+            best_action = alowed[0];
+        }
+
+        let best_card_id = learner.action_card_id(&best_action, self, player);
+
+        self.play_card(player, best_card_id);
+
+        show::show_table_wait(&self.table);
+    }
+
+    /// a simple rule based AI plays a card given the current situation.
+    // fn rulebased_plays(&mut self, player: PlayerID) {
+    //     self.play_easy(player);
+
+    //     show::show_table_wait(&self.table);
+    // }
+
+    pub fn play_round(&mut self, learner: &mut QLearner) {
         for i in self.turn..self.turn + 4 {
             let player = i % 4;
 
@@ -358,12 +380,7 @@ impl Game {
 
                 show::show_table_wait(&self.table);
             } else {
-                // AI thinks for a little while
-                // thread::sleep(Duration::from_millis(500));
-
-                self.play_easy(player);
-
-                show::show_table_wait(&self.table);
+                self.ai_plays(player, learner);
             }
         }
 

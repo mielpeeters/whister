@@ -5,10 +5,7 @@
 use crate::{card::Card, suit::Suit};
 use rand::seq::SliceRandom;
 use rand::Rng;
-use std::{
-    cmp::min,
-    fmt,
-};
+use std::{cmp::min, fmt};
 
 pub type CardID = usize;
 
@@ -207,22 +204,20 @@ impl Deck {
         &self.cards[random_index]
     }
 
-    pub fn lowest(&self, available: &[CardID], trump: &Suit) -> CardID {
-        *available
+    pub fn lowest(&self, available: &[CardID], trump: &Suit) -> Option<CardID> {
+        available
             .iter()
             .enumerate()
             .min_by(|(_, me), (_, other)| self.card(**me).better(self.card(**other), trump))
-            .map(|(_, card_id)| card_id)
-            .unwrap()
+            .map(|(_, card_id)| card_id).copied()
     }
 
-    pub fn highest(&self, available: &[CardID], trump: &Suit) -> CardID {
-        *available
+    pub fn highest(&self, available: &[CardID], trump: &Suit) -> Option<CardID> {
+        available
             .iter()
             .enumerate()
             .max_by(|(_, one), (_, two)| self.card(**one).better(self.card(**two), trump))
-            .map(|(_, card_id)| card_id)
-            .unwrap()
+            .map(|(_, card_id)| card_id).copied()
     }
 
     fn set_suit_amounts(&mut self) {
@@ -406,7 +401,7 @@ mod tests {
 
         let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-        assert_eq!(deck.highest(available, &Suit::Hearts), 12);
+        assert_eq!(deck.highest(available, &Suit::Hearts).unwrap(), 12);
     }
 
     #[test]
@@ -415,7 +410,7 @@ mod tests {
 
         let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24];
 
-        assert_eq!(deck.highest(available, &Suit::Hearts), 24);
+        assert_eq!(deck.highest(available, &Suit::Hearts).unwrap(), 24);
     }
 
     #[test]
@@ -424,7 +419,7 @@ mod tests {
 
         let available: &[CardID] = &[0, 1, 2, 3, 12, 37];
 
-        assert_eq!(deck.highest(available, &Suit::Hearts), 37);
+        assert_eq!(deck.highest(available, &Suit::Hearts).unwrap(), 37);
     }
 
     #[test]

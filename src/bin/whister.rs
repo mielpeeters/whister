@@ -8,11 +8,43 @@ use text_io::read;
 
 fn main() {
     let mut game = Game::new();
+    let mut count = 0;
+
+
+    println!("How many human players will participate?");
+    let humans: usize = read!();
+    game.add_human_players(humans).expect("Unable to add human players.");
+
+    if humans > 0 {
+        println!("Insert model name [modelname/n]");
+        let from_model: String = read!();
+        let mut learner = QLearner::new(Game::new());
+        learner.import_from_model(from_model, true);
+
+        loop {
+            for _ in 0..13 {
+                game.play_round(&mut learner);
+            }
+    
+            game.new_round();
+            game.show_scores();
+    
+            println!("Play another round? (false / true)");
+            let answer: bool = read!();
+            if !answer {
+                break;
+            }
+            
+            count += 1;
+            if count > 30000 {
+                break;
+            }
+            
+        }
+    }
 
     println!("Will an AI player participate? [y/n]");
     let ai_player: String = read!();
-
-    let mut count = 0;
 
     if ai_player == "y" {
         let mut learner: QLearner;
@@ -29,7 +61,6 @@ fn main() {
             learner = QLearner::new_with_iter(Game::new(), iterations);
     
             learner.train();
-
         }
 
 
@@ -48,13 +79,13 @@ fn main() {
 
             for _ in 0..gamesize {
                 let mut best_action = *learner.best_action_score(&game.state()).0;
-                let alowed = learner.alowed_actions(&game);
+                let alowed = learner.alowed_actions(&game, 0);
 
                 if !alowed.iter().any(|a| *a == best_action) {
                     best_action = alowed[0];
                 }
 
-                let best_card_id = learner.action_card_id(&best_action, &game);
+                let best_card_id = learner.action_card_id(&best_action, &game, 0);
                 
                 if slow {
                     played_card = game.players.get(0).unwrap().card(best_card_id).clone();
@@ -97,35 +128,7 @@ fn main() {
         if answer == "n" {
             return
         }
-        learner.save_result(answer, true);
-        
-        return 
+
+        learner.save_result(answer, true); 
     } 
-
-    println!("How many human players will participate?");
-    let answer: usize = read!();
-    game.add_human_players(answer).expect("Unable to add human players.");
-
-
-    loop {
-        for _ in 0..13 {
-            game.play_round();
-        }
-
-        game.new_round();
-        game.show_scores();
-
-        println!("Play another round? (false / true)");
-        let answer: bool = read!();
-        if !answer {
-            break;
-        }
-        
-        count += 1;
-        if count > 30000 {
-            break;
-        }
-        
-    }
-
 }
