@@ -349,7 +349,7 @@ impl Game {
         self.play_card(player, idx);
     }
 
-    fn ai_plays(&mut self, player: PlayerID, learner: &mut QLearner) {
+    fn ai_plays(&mut self, player: PlayerID, learner: &mut QLearner, slow: bool) {
         let mut best_action = *learner.best_action_score(&self.state()).0;
         let alowed = learner.alowed_actions(self, player);
 
@@ -361,7 +361,10 @@ impl Game {
 
         self.play_card(player, best_card_id);
 
-        show::show_table_wait(&self.table);
+        if slow {
+            show::show_table_wait(&self.table);
+        }
+        
     }
 
     /// a simple rule based AI plays a card given the current situation.
@@ -380,7 +383,7 @@ impl Game {
 
                 show::show_table_wait(&self.table);
             } else {
-                self.ai_plays(player, learner);
+                self.ai_plays(player, learner, true);
             }
         }
 
@@ -393,7 +396,7 @@ impl Game {
         self.trick().expect("Couldn't play trick in play_round");
     }
 
-    pub fn agent_plays_round(&mut self, card: CardID) {
+    pub fn agent_plays_round(&mut self, card: CardID, learner: &mut QLearner) {
         let mut plyr = 0;
 
         self.play_card(plyr, card);
@@ -404,7 +407,7 @@ impl Game {
             }
 
             plyr += 1;
-            self.play_easy(plyr);
+            self.ai_plays(plyr, learner, false);
         }
 
         self.turn = (self.winner() + self.turn) % 4;
@@ -421,7 +424,7 @@ impl Game {
                 break;
             }
 
-            self.play_easy(plyr);
+            self.ai_plays(plyr, learner, false);
             plyr += 1;
         }
     }

@@ -78,6 +78,7 @@ pub struct QLearner {
     pub iterations: u64,
     pub game: Game,
     current_iter: u64,
+    opponent: usize
 }
 
 impl QLearner {
@@ -92,6 +93,7 @@ impl QLearner {
             iterations: 100000,
             game,
             current_iter: 0,
+            opponent: 0,
         }
     }
 
@@ -109,13 +111,18 @@ impl QLearner {
                 .progress_chars("━━─"),
         );
 
+        let mut opponent = QLearner::new(Game::new());
+        if self.opponent == 1 {
+            opponent.import_from_model("whister.pkl".to_string(), false);
+        }
+
         loop {
             let current_state = self.game.state();
 
             // determine a new action to take, from current state
             let action = self.new_action(&current_state);
 
-            self.take_action(&action);
+            self.take_action(&action, &mut opponent);
 
             // reward is the reward that's coupled with this action
             let reward = self.game.reward();
@@ -215,9 +222,9 @@ impl QLearner {
         alowed
     }
 
-    fn take_action(&mut self, action: &Action) {
+    fn take_action(&mut self, action: &Action, opponent: &mut QLearner) {
         let card_id = self.action_card_id(action, &self.game, 0);
-        self.game.agent_plays_round(card_id);
+        self.game.agent_plays_round(card_id, opponent);
     }
 
     pub fn action_card_id(&self, action: &Action, game: &Game, player: usize) -> CardID {
