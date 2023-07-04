@@ -4,9 +4,6 @@
  * Multiple difficulty levels are defined, by giving the agent increasing amounts of data to
  * train on. Trained models will be supplied when they are finished (basically a serialized Q hash map).
  */
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 use crate::game::Game;
 use crate::{deck::CardID, suit::Suit};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -43,7 +40,6 @@ pub enum Action {
     PlaySmall,
 }
 
-const GROUP_SIZE: usize = 3;
 const MIN_EXPLORE: u64 = 30;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord, Serialize, Deserialize)]
@@ -116,7 +112,6 @@ impl QLearner {
 
         loop {
             let current_state = self.game.state();
-            let current_values = self.q.get(&current_state).unwrap_or(&HashMap::new());
 
             // determine a new action to take, from current state
             let action = self.new_action(&current_state);
@@ -282,28 +277,12 @@ impl QLearner {
         }
     }
 
-    fn show_result(&self) {
-        for result in self.q.keys().sorted() {
-            println!("State:");
-            println!("{}", result);
-
-            for action in self.q.get(result).unwrap().keys().sorted() {
-                println!(
-                    "  {}: {}",
-                    action,
-                    self.q.get(result).unwrap().get(action).unwrap()
-                );
-            }
-            println!();
-        }
-    }
-
     pub fn save_result(&self, path: String) {
         let serialized = serde_pickle::to_vec(&self.q, Default::default()).unwrap();
 
         let mut file = match File::create(path) {
             Ok(it) => it,
-            Err(err) => return,
+            Err(_) => return,
         };
         file.write_all(serialized.as_slice()).unwrap();
     }
@@ -311,7 +290,7 @@ impl QLearner {
     pub fn import_from_model(&mut self, path: String) {
         let file = match File::open(path) {
             Ok(it) => it,
-            Err(err) => return,
+            Err(_) => return,
         };
 
         let mut reader = BufReader::new(file);
@@ -339,7 +318,6 @@ impl Display for GameState {
         writeln!(f, "have_higher: {}", self.have_higher)?;
         writeln!(f, "have_trump: {}", self.have_trump)?;
         write!(f, "first_suit: {}", self.first_suit)
-        // write!(f, "nb_trump: {}", self.nb_trump)
     }
 }
 
