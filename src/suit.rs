@@ -5,7 +5,7 @@
 use std::fmt;
 use std::slice::Iter;
 
-#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash, Debug)]
 pub enum Suit {
     Spades = 0,
     Clubs = 1,

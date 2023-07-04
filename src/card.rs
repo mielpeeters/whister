@@ -6,7 +6,7 @@ use crate::suit::Suit;
 use std::cmp::Ordering;
 use std::fmt;
 
-#[derive(Eq, Clone, PartialEq, Hash)]
+#[derive(Eq, Clone, PartialEq, Hash, Debug)]
 pub struct Card {
     pub suit: Suit,
     pub number: u8,
@@ -21,21 +21,35 @@ impl Card {
         }
     }
 
-    pub fn better(&self, other: &Card, trump: &Suit) -> Ordering {
+    /// Determine which card wins when comparing them on a table
+    pub fn winning(&self, other: &Card, trump: &Suit) -> Ordering {
         if self.suit == other.suit {
-            self.cmp(other)
+            // if we the cards have the same suit, we compare based on score
+            self.score().cmp(&other.score())
         } else if self.suit == *trump {
+            // if my suit is trump, and the other's isn't, I win
             Ordering::Greater
         } else if other.suit == *trump {
+            // if my suit isn't trump, and the other's is, they win
             Ordering::Less
         } else {
+            // if we have different non-trump suits, the first card dominates
+            Ordering::Greater
+        }
+    }
+
+    /// Determine which card has a higher "value" to the player
+    pub fn higher(&self, other: &Card, trump: &Suit) -> Ordering {
+        if self.suit != other.suit && self.suit != *trump && other .suit != *trump {
             self.score().cmp(&other.score())
+        } else {
+            self.winning(other, trump)
         }
     }
 }
 
 impl Ord for Card {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         if self.suit != other.suit {
             self.suit.cmp(&other.suit)
         } else {

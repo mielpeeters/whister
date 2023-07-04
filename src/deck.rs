@@ -2,7 +2,7 @@
  * Pack of cards, not necessarily a full deck. Lots of functionality.
  */
 
-use crate::{card::Card, suit::Suit};
+use crate::{card::Card, suit::Suit, player::Player};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use std::{cmp::min, fmt};
@@ -110,6 +110,10 @@ impl Deck {
         self.cards.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.cards.is_empty()
+    }
+
     pub fn shuffle(&mut self) {
         self.cards.shuffle(&mut rand::thread_rng());
     }
@@ -117,6 +121,10 @@ impl Deck {
     /// sort the cards by Suits first, then by ascending number
     pub fn sort(&mut self) {
         self.cards.sort();
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, Card> {
+        self.cards.iter()
     }
 
     pub fn get_deck_of_suit(&self, suit: &Suit) -> Deck {
@@ -208,7 +216,7 @@ impl Deck {
         available
             .iter()
             .enumerate()
-            .min_by(|(_, me), (_, other)| self.card(**me).better(self.card(**other), trump))
+            .min_by(|(_, me), (_, other)| self.card(**me).higher(self.card(**other), trump))
             .map(|(_, card_id)| card_id).copied()
     }
 
@@ -216,7 +224,15 @@ impl Deck {
         available
             .iter()
             .enumerate()
-            .max_by(|(_, one), (_, two)| self.card(**one).better(self.card(**two), trump))
+            .max_by(|(_, one), (_, two)| self.card(**one).higher(self.card(**two), trump))
+            .map(|(_, card_id)| card_id).copied()
+    }
+
+    pub fn winning(&self, available: &[CardID], trump: &Suit) -> Option<CardID> {
+        available
+            .iter()
+            .enumerate()
+            .max_by(|(_, one), (_, two)| self.card(**one).winning(self.card(**two), trump))
             .map(|(_, card_id)| card_id).copied()
     }
 
@@ -271,8 +287,49 @@ impl Deck {
 
         self.selected = selected + coord.1;
     }
+}
 
-    pub fn select_right(&mut self) {
+impl Player for Deck {
+    /// Create a new player, pulling `amount` cards from `deck`
+    fn new_take_cards(deck: &mut Deck, amount: usize) -> Deck {
+        let mut pulled = deck.pull_cards(amount);
+        pulled.sort();
+        Deck::new_from(pulled.cards)
+    }
+    
+    /// show the cards this player is holding, by first sorting them!
+    fn show_cards(&mut self) {
+        self.show_sort();
+    }
+    
+    /// look at a random card of this player's deck
+    fn random_card(&self) -> &Card {
+        self.peek()
+    }
+    
+    /// Does this player have any cards left?
+    fn has_cards(&self) -> bool {
+        !self.is_empty()
+    }
+    
+    /// Does this player have any cards of this suit?
+    fn can_follow(&self, suit: Suit) -> bool {
+        self.has_suit(&suit)
+    }
+    
+    fn card(&self, card: CardID) -> &Card {
+        self.card(card)
+    }
+    
+    fn selected_card(&self) -> &Card {
+        self.selected()
+    }
+    
+    fn selected_id(&self) -> CardID {
+        self.selected_id()
+    }
+
+    fn select_right(&mut self) {
         let coor = self.selected_to_coordinate();
 
         let mut new_x = coor.1 + 1;
@@ -282,7 +339,7 @@ impl Deck {
         self.coordinate_to_selected((coor.0, new_x));
     }
 
-    pub fn select_left(&mut self) {
+    fn select_left(&mut self) {
         let coor = self.selected_to_coordinate();
 
         if coor.1 == 0 {
@@ -297,7 +354,7 @@ impl Deck {
         self.coordinate_to_selected((coor.0, new_x));
     }
 
-    pub fn select_up(&mut self) {
+    fn select_up(&mut self) {
         let coor = self.selected_to_coordinate();
 
         let mut new_y = coor.0;
@@ -316,7 +373,7 @@ impl Deck {
         self.coordinate_to_selected((new_y, new_x));
     }
 
-    pub fn select_down(&mut self) {
+    fn select_down(&mut self) {
         let coor = self.selected_to_coordinate();
 
         let mut new_y = coor.0;
@@ -345,7 +402,7 @@ impl Default for Deck {
 impl fmt::Display for Deck {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // do not show an empty deck!
-        if self.size() == 0 {
+        if self.is_empty() {
             return write!(f, "  Empty");
         }
 
@@ -396,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn test_highest_one_suit() {
+    fn highest_one_suit() {
         let deck = init_deck();
 
         let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -405,32 +462,86 @@ mod tests {
     }
 
     #[test]
-    fn test_highest_mult_suits() {
+    fn highest_mult_suits() {
         let deck = init_deck();
 
         let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24];
 
-        assert_eq!(deck.highest(available, &Suit::Hearts).unwrap(), 24);
+        assert_eq!(deck.highest(available, &Suit::Hearts).unwrap(), 12);
     }
 
     #[test]
-    fn test_highest_trump() {
+    fn highest_trump() {
         let deck = init_deck();
 
         let available: &[CardID] = &[0, 1, 2, 3, 12, 37];
 
-        assert_eq!(deck.highest(available, &Suit::Hearts).unwrap(), 37);
+        assert_eq!(deck.highest(available, &Suit::Hearts).unwrap(), 12);
     }
 
     #[test]
-    fn test_suit_amounts_init() {
+    fn lowest_one_suit() {
+        let deck = init_deck();
+
+        let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+        assert_eq!(deck.lowest(available, &Suit::Hearts).unwrap(), 0);
+    }
+
+    #[test]
+    fn lowest_mult_suits() {
+        let deck = init_deck();
+
+        let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24];
+
+        assert_eq!(deck.lowest(available, &Suit::Hearts).unwrap(), 0);
+    }
+
+    #[test]
+    fn lowest_trump() {
+        let deck = init_deck();
+
+        let available: &[CardID] = &[0, 1, 2, 3, 12, 37];
+
+        assert_eq!(deck.lowest(available, &Suit::Hearts).unwrap(), 0);
+    }
+
+    #[test]
+    fn winning_one_suit() {
+        let deck = init_deck();
+
+        let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+        assert_eq!(deck.winning(available, &Suit::Hearts).unwrap(), 12);
+    }
+
+    #[test]
+    fn winning_mult_suits() {
+        let deck = init_deck();
+
+        let available: &[CardID] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24];
+
+        assert_eq!(deck.winning(available, &Suit::Hearts).unwrap(), 12);
+    }
+
+    #[test]
+    fn winning_trump() {
+        let deck = init_deck();
+
+        let available: &[CardID] = &[0, 1, 2, 3, 12, 39];
+
+        assert_eq!(deck.winning(available, &Suit::Hearts).unwrap(), 39);
+    }
+
+    #[test]
+    fn suit_amounts_init() {
         let deck = init_deck();
 
         assert_eq!(deck.get_suit_amount(&Suit::Diamonds), 13);
     }
 
     #[test]
-    fn test_suit_amounts_pull() {
+    fn suit_amounts_pull() {
         let mut deck = init_deck();
         let pulled = deck.pull_cards(12);
 
@@ -450,5 +561,10 @@ mod tests {
             deck.get_suit_amount(&Suit::Clubs),
             13 - pulled.get_suit_amount(&Suit::Clubs)
         );
+    }
+
+    #[test]
+    fn can_follow() {
+
     }
 }

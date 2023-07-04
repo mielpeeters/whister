@@ -1,0 +1,56 @@
+digraph Test {
+    rankdir="LR"
+    node [
+		fontname="Helvetica,Arial,sans-serif"
+		shape=record
+		style=filled
+		fillcolor=gray90
+	]
+
+    QLearner -> Game
+    Game -> Player
+    Game -> Deck
+    Player -> Deck
+    Deck -> Card
+    Card -> Suit
+
+    GameState -> QLearner
+    Game -> GameState
+
+    QLearner -> Action
+    Action -> Game [dir="both"]
+
+    Suit[label = <{<b>Suit</b> | \{Spades, <br/> Clubs, <br/> Diamonds, <br/> Hearts \}<br/>}>]
+
+    Card[label = <{<b>Card</b> | <b>pub  </b> suit: Suit <br/> <b>pub  </b> number: u8}>]
+
+    Deck[label = <{<b>Deck</b> | <b>pub  </b> cards: Vec[Card] <br/>
+    selected: usize<br/>
+    suit_amounts: [usize; 4]<br/>
+    curr: usize}>]
+
+    Player[label = <{<b>Player</b> | <b>pub  </b> cards: Deck}>]
+
+    Game[label = <{<b>Game</b> | 
+    tricks: Vec[Deck]<br/>
+    table: Deck<br/>
+    <b>pub  </b> players: [Player; 4]<br/>
+    turn: usize<br/>
+    trump: Suit<br/>
+    scores: [u32; 4]<br/>
+    human_players: usize<br/>
+    wait: bool<br/>
+    round_scores: [u32; 4]<br/>
+    gone_cards: [[bool; 13]; 4]}>]
+
+    QLearner[label = <{<b>QLearner</b> | <b>pub  </b> q: Q<br/>
+    <b>pub  </b> rate: f64<br/>
+    <b>pub  </b> discount: f64<br/>
+    <b>pub  </b> initial_value: f64<br/>
+    <b>pub  </b> iterations: u64<br/>
+    <b>pub  </b> game: Game<br/>
+    current_iter: u64<br/>
+    opponent: String}>]
+
+    GameState[label = <{<b>GameState</b> | fields... }>]
+}

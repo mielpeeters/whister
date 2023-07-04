@@ -5,6 +5,7 @@
  * train on. Trained models will be supplied when they are finished (basically a serialized Q hash map).
  */
 use crate::game::Game;
+use crate::player::Player;
 use crate::{deck::CardID, suit::Suit};
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
