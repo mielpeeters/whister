@@ -37,8 +37,6 @@ pub enum Action {
     PlayBest,
     /// come out with a card you know is the best
     ComeBest,
-    /// play the worst card of the least-populated set that isn't trumps
-    PlaySmall,
 }
 
 const MIN_EXPLORE: u64 = 30;
@@ -195,14 +193,10 @@ impl QLearner {
 
         if !first {
             alowed.push(Action::PlayWorst);
-            if !game.can_follow(0) {
-                alowed.push(Action::PlaySmall);
-            }
         }
 
         if first {
             alowed.push(Action::PlayWorst);
-            alowed.push(Action::PlaySmall);
             if state.has_highest.iter().any(|highest| *highest) {
                 alowed.push(Action::ComeBest);
             }
@@ -258,22 +252,6 @@ impl QLearner {
                 let suit_ids = game.of_which_suit(0, &playable, suit);
 
                 game.highest_card_of(0, &suit_ids)
-            }
-            Action::PlaySmall => {
-                let least_suit = Suit::iterator()
-                    .cloned()
-                    .filter(|s| *s != Suit::Hearts)
-                    .filter(|s| game.players[0].cards.get_suit_amount(s) != 0)
-                    .min_by_key(|s| game.players[0].cards.get_suit_amount(s))
-                    .unwrap_or(Suit::Clubs);
-
-                let least_suit_cards = game.of_which_suit(0, &playable, least_suit as usize);
-
-                if !least_suit_cards.is_empty() {
-                    game.lowest_card_of(0, &least_suit_cards)
-                } else {
-                    playable[0]
-                }
             }
         }
     }
@@ -375,7 +353,6 @@ impl Display for Action {
             Action::Random => write!(f, "Random"),
             Action::PlayBest => write!(f, "PlayBest"),
             Action::ComeBest => write!(f, "ComeBest"),
-            Action::PlaySmall => write!(f, "PlaySmall"),
         }
     }
 }
