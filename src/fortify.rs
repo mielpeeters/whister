@@ -288,7 +288,7 @@ impl QLearner {
                     .get(test.0)
                     .unwrap()
                     .iter()
-                    .max_by(|score1, score2| score1.partial_cmp(score2).unwrap())
+                    .max_by(|score1, score2| score1.1.partial_cmp(score2.1).unwrap())
                     .unwrap()
                     .0,
             );
