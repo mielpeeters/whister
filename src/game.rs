@@ -121,10 +121,9 @@ impl Game {
         if self.table.size() == 4 {
             // determine winning player, set turn to them
             self.turn = (self.winner() + self.turn) % 4;
-            
+
             // add 1 to the winner's score
             self.round_scores[self.turn] += 1;
-
 
             let new_trick = self.table.pull_cards(4);
 
@@ -246,7 +245,7 @@ impl Game {
     fn play_easy(&mut self) {
         // get player id from the current turn
         let player = self.turn;
-        
+
         // get alowed indeces
         let playable = self.alowed_cards();
 
@@ -395,7 +394,7 @@ impl Game {
                 show::show_table_wait(&self.table);
             }
         }
-        
+
         self.trick().expect("Couldn't play trick in play_round");
 
         show::winner(self.turn);
@@ -460,7 +459,7 @@ impl Game {
 
     pub fn action_card_id(&self, action: &Action) -> CardID {
         let player = self.turn;
-        
+
         let playable = self.alowed_cards();
 
         match action {
@@ -558,9 +557,12 @@ impl GameSpace<GameState> for Game {
 
             let winner = self.winner();
 
-            have_higher = playable
-                .iter()
-                .any(|card_id| *self.players[player].card(*card_id) > self.table.cards[winner]);
+            have_higher = playable.iter().any(|card_id| {
+                self.players[player]
+                    .card(*card_id)
+                    .winning(&self.table.cards[winner], &self.trump)
+                    == Ordering::Greater
+            });
         }
 
         for s in Suit::iterator() {
@@ -577,8 +579,6 @@ impl GameSpace<GameState> for Game {
                 has_highest[*s as usize] = false;
             }
         }
-
-        
 
         GameState {
             can_follow,
