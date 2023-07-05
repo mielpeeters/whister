@@ -8,6 +8,6 @@ pub mod suit;
 pub mod card;
 pub mod game;
 pub mod player;
-pub mod fortify_old;
 pub mod show;
 pub mod fortify;
+pub mod gamestate;

@@ -4,12 +4,17 @@
  * Multiple difficulty levels are defined, by giving the agent increasing amounts of data to
  * train on. Trained models will be supplied when they are finished (basically a serialized Q hash map).
  */
+use indicatif::{ProgressBar, ProgressStyle};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::cmp::{max, Ordering};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fs::File;
 use std::hash::Hash;
+use std::io::{BufReader, Read, Write};
 
-pub trait GameState:
+pub trait State:
     PartialEq
     + Eq
     + Hash
@@ -21,340 +26,244 @@ pub trait GameState:
     + Serialize
     + for<'a> Deserialize<'a>
 {
-}
-
-pub trait Game<S: GameState> {
-    // the action type associated with this state
-    type A: Hash
-        + PartialEq
+    /// the action type associated with this state
+    type A: PartialEq
         + Eq
+        + Hash
+        + Clone
+        + Copy
         + Debug
         + PartialOrd
         + Ord
         + Serialize
-        + for<'a> Deserialize<'a>
-        + Copy
-        + Clone;
+        + Default
+        + for<'a> Deserialize<'a>;
+}
 
-    // determine the reward coupled with getting to the current state
+pub trait GameSpace<S: State> {
+    /// determine the reward coupled with getting to the current state
     fn reward(&self) -> f64;
 
-    // alowed actions from the current state
-    fn actions(&self) -> Vec<Self::A>;
+    /// alowed actions from the current state
+    fn actions(&self) -> Vec<S::A>;
 
-    // returns the current gamestate
+    /// returns the current gamestate
     fn state(&self) -> S;
 
-    // gets a random alowed action (for exploration)
-    fn random_action(&self) -> Self::A {
+    /// gets a random alowed action (for exploration)
+    fn random_action(&self) -> S::A {
         let actions = self.actions();
         let a_t = rand::random::<usize>() % actions.len();
         actions[a_t]
     }
+
+    /// performs the action
+    fn take_action(&mut self, action: &S::A);
 }
 
-pub trait Agent<S: GameState> {
+pub type Q<S> = HashMap<S, HashMap<<S as State>::A, f64>>;
 
+pub struct QLearner<S>
+where
+    S: State,
+{
+    q: Q<S>,
+    rate: f64,
+    discount: f64,
+    initial_value: f64,
+    iterations: u64,
+    current_iter: u64,
 }
 
-pub type Q<G, S> = HashMap<G, HashMap<<G as Game<S>>::A, f64>>;
+impl<S> QLearner<S>
+where
+    S: State,
+{
+    pub fn new() -> Self {
+        let q = HashMap::new();
 
-// pub struct QLearner<G: Game<S>, S: GameState> {
-//     q: Q<G, S>,
-//     rate: f64,
-//     discount: f64,
-//     initial_value: f64,
-//     iterations: u64,
-//     current_iter: u64,
-// }
+        QLearner {
+            q,
+            rate: 0.05,
+            discount: 0.8,
+            initial_value: 0.5,
+            iterations: 100000,
+            current_iter: 0,
+        }
+    }
 
-// impl QLearner {
-//     pub fn new(game: Game) -> Self {
-//         let q = HashMap::new();
+    pub fn new_with_iter(iter: u64) -> Self {
+        let mut learner = Self::new();
+        learner.iterations = iter;
+        learner
+    }
 
-//         QLearner {
-//             q,
-//             rate: 0.05,
-//             discount: 0.8,
-//             initial_value: 0.5,
-//             iterations: 100000,
-//             game,
-//             current_iter: 0,
-//             opponent: "".to_string(),
-//         }
-//     }
+    pub fn train(&mut self, game: &mut dyn GameSpace<S>) {
+        let pb = ProgressBar::new(self.iterations);
+        pb.set_style(
+            ProgressStyle::with_template("  {bar:40.green/black}   {pos} / {len}   eta: {eta}")
+                .unwrap()
+                .progress_chars("━━─"),
+        );
 
-//     pub fn new_with_iter(game: Game, iter: u64) -> Self {
-//         let mut learner = Self::new(game);
-//         learner.iterations = iter;
-//         learner
-//     }
+        loop {
+            let current_state = game.state();
 
-//     pub fn set_opponent(&mut self, opponent: String) {
-//         self.opponent = opponent;
-//     }
+            // determine a new action to take, from current state
+            let action = self.new_action(game);
 
-//     pub fn train(&mut self) {
-//         let pb = ProgressBar::new(self.iterations);
-//         pb.set_style(
-//             ProgressStyle::with_template("  {bar:40.green/black}   {pos} / {len}   eta: {eta}")
-//                 .unwrap()
-//                 .progress_chars("━━─"),
-//         );
+            game.take_action(&action);
 
-//         let mut opponent = QLearner::new(Game::new());
-//         if !self.opponent.is_empty() {
-//             println!("IMPORTING \x1b[1m{}\x1b[0m", self.opponent);
-//             opponent.import_from_model(self.opponent.clone(), false);
-//         }
+            // reward is the reward that's coupled with this action
+            let reward = game.reward();
+            let best_future = *self.best_action_score(&game.state()).1;
 
-//         loop {
-//             let current_state = self.game.state(0);
+            // new value to assign to Q(s,a)
+            let v: f64 = {
+                // get the old value of Q(s,a) if it is available
+                let old_value = self
+                    .q
+                    .get(&current_state)
+                    .and_then(|m| m.get(&action))
+                    .unwrap_or(&self.initial_value);
 
-//             // determine a new action to take, from current state
-//             let action = self.new_action(&current_state);
+                *old_value + self.rate * (reward + self.discount * best_future - *old_value)
+            };
 
-//             self.take_action(&action, &mut opponent);
+            self.q
+                .entry(current_state)
+                .or_insert_with(HashMap::new)
+                .insert(action, v);
 
-//             // reward is the reward that's coupled with this action
-//             let reward = self.game.reward();
-//             let best_future = *self.best_action_score(&self.game.state(0)).1;
+            self.current_iter += 1;
+            pb.inc(1);
 
-//             // new value to assign to Q(s,a)
-//             let v: f64 = {
-//                 // get the old value of Q(s,a) if it is available
-//                 let old_value = self
-//                     .q
-//                     .get(&current_state)
-//                     .and_then(|m| m.get(&action))
-//                     .unwrap_or(&self.initial_value);
+            if self.current_iter >= self.iterations {
+                break;
+            }
+        }
 
-//                 *old_value + self.rate * (reward + self.discount * best_future - *old_value)
-//             };
+        pb.finish();
+    }
 
-//             self.q
-//                 .entry(current_state)
-//                 .or_insert_with(HashMap::new)
-//                 .insert(action, v);
+    /// determine the best action in current state, based on the q function
+    pub fn best_action_score(&mut self, state: &S) -> (&S::A, &f64) {
+        let best = self
+            .q
+            .entry(*state)
+            // .or_insert_with(|| HashMap::new().insert(&Default::default(), &0.0))
+            .or_insert_with(|| {
+                let mut new = HashMap::new();
+                new.insert(S::A::default(), 0.0);
+                new
+            })
+            .iter()
+            .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Equal));
 
-//             self.current_iter += 1;
-//             pb.inc(1);
+        best.unwrap()
+    }
 
-//             if self.current_iter >= self.iterations {
-//                 break;
-//             }
-//         }
+    /// determine the action the agent takes while exploring the statespace
+    fn new_action(&mut self, game: &dyn GameSpace<S>) -> S::A {
+        let alowed = game.actions();
 
-//         pb.finish();
-//     }
+        let exploit_factor = rand::thread_rng().gen_range(0..100);
 
-//     /// determine the best action in current state, based on the q function
-//     pub fn best_action_score(&mut self, state: &GameState) -> (&Action, &f64) {
-//         let best = self
-//             .q
-//             .entry(*state)
-//             .or_insert_with(HashMap::new)
-//             .iter()
-//             .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Equal));
+        let explore_factor: f64 =
+            100.0 * (self.iterations as f64 - self.current_iter as f64) / (self.iterations as f64);
 
-//         best.unwrap_or((&Action::RaiseHigh, &0.0))
-//     }
+        let best = self.best_action_score(&game.state());
 
-//     /// determine the action the agent takes while exploring the statespace
-//     fn new_action(&mut self, state: &GameState) -> Action {
-//         let alowed = self.alowed_actions(&self.game, 0);
+        if alowed.contains(best.0) && exploit_factor > max(explore_factor as u64, 20) {
+            // EXPLOIT
+            return *best.0;
+        }
 
-//         let exploit_factor = rand::thread_rng().gen_range(0..100);
+        // EXPLORE
 
-//         let explore_factor: f64 =
-//             100.0 * (self.iterations as f64 - self.current_iter as f64) / (self.iterations as f64);
+        let num = rand::thread_rng().gen_range(0..alowed.len());
 
-//         let best = self.best_action_score(state);
+        *alowed.get(num).unwrap()
+    }
 
-//         if alowed.contains(best.0) && exploit_factor > max(explore_factor as u64, MIN_EXPLORE) {
-//             // EXPLOIT
-//             return *best.0;
-//         }
+    fn q_to_optimal(&self) -> HashMap<S, S::A> {
+        let mut optimal_action = HashMap::new();
+        self.q.iter().for_each(|test| {
+            optimal_action.insert(
+                *test.0,
+                *self
+                    .q
+                    .get(test.0)
+                    .unwrap()
+                    .iter()
+                    .max_by(|score1, score2| score1.1.partial_cmp(score2.1).unwrap())
+                    .unwrap()
+                    .0,
+            );
+        });
 
-//         // EXPLORE
+        optimal_action
+    }
 
-//         let num = rand::thread_rng().gen_range(0..alowed.len());
+    fn optimal_to_q(&mut self, optimal: HashMap<S, S::A>) {
+        self.q = HashMap::new();
 
-//         *alowed.get(num).unwrap()
-//     }
+        optimal.iter().for_each(|state_action| {
+            let mut action_value = HashMap::new();
+            action_value.insert(*state_action.1, 10.0);
+            self.q.insert(*state_action.0, action_value);
+        });
+    }
 
-//     pub fn alowed_actions(&self, game: &Game, player: usize) -> Vec<Action> {
-//         let playable = game.alowed_cards(player);
-//         let better = game.better_cards_of(player, &playable);
-//         let state = game.state(player);
-//         let mut alowed: Vec<Action> = Vec::new();
-//         let first: bool = state.first_suit == -1;
+    pub fn save_result(&self, path: String, reduced: bool) {
+        let serialized = match reduced {
+            true => {
+                let optimal = self.q_to_optimal();
+                serde_pickle::to_vec(&optimal, Default::default()).unwrap()
+            }
+            false => serde_pickle::to_vec(&self.q, Default::default()).unwrap(),
+        };
 
-//         if !first {
-//             alowed.push(Action::PlayWorst);
-//         }
+        let mut file = match File::create(path) {
+            Ok(it) => it,
+            Err(_) => return,
+        };
 
-//         if first {
-//             alowed.push(Action::PlayWorst);
-//             if state.has_highest.iter().any(|highest| *highest) {
-//                 alowed.push(Action::ComeBest);
-//             }
-//         }
+        file.write_all(serialized.as_slice()).unwrap();
+    }
 
-//         if game.players[player].can_follow(Suit::Hearts) && (first || !game.can_follow(player)) {
-//             alowed.push(Action::TrumpHigh);
-//             alowed.push(Action::TrumpLow);
-//         }
+    pub fn import_from_model(&mut self, path: String, reduced: bool) {
+        let file = match File::open(path) {
+            Ok(it) => it,
+            Err(_) => {
+                println!("\x1b[91mCouldn't import that model...\x1b[0m");
+                return;
+            }
+        };
 
-//         if game.can_follow(player) && !better.is_empty() && !first {
-//             alowed.push(Action::RaiseLow);
-//             alowed.push(Action::RaiseHigh);
-//         }
+        let mut reader = BufReader::new(file);
+        let mut serialized = Vec::new();
 
-//         alowed
-//     }
+        reader.read_to_end(&mut serialized).unwrap();
 
-//     fn take_action(&mut self, action: &Action, opponent: &mut QLearner) {
-//         let card_id = self.action_card_id(action, &self.game, 0);
-//         self.game.agent_plays_round(card_id, opponent);
-//     }
+        if reduced {
+            let deserialized: HashMap<S, S::A> =
+                serde_pickle::from_slice(&serialized, Default::default()).unwrap();
 
-//     pub fn action_card_id(&self, action: &Action, game: &Game, player: usize) -> CardID {
-//         let playable = game.alowed_cards(player);
+            self.optimal_to_q(deserialized);
+        } else {
+            let deserialized: Q<S> =
+                serde_pickle::from_slice(&serialized, Default::default()).unwrap();
+            self.q = deserialized;
+        }
+    }
+}
 
-//         match action {
-//             Action::PlayWorst => game
-//                 .lowest_card_of(player, &playable)
-//                 .unwrap_or(playable[0]),
-//             Action::RaiseLow => {
-//                 let better = game.better_cards_of(player, &playable);
-//                 game.lowest_card_of(player, &better).unwrap_or(playable[0])
-//             }
-//             Action::RaiseHigh => {
-//                 let better = game.better_cards_of(player, &playable);
-//                 game.highest_card_of(player, &better).unwrap_or(playable[0])
-//             }
-//             Action::TrumpHigh => {
-//                 let trumps = game.of_which_suit(player, &playable, 3);
-//                 game.highest_card_of(player, &trumps).unwrap_or(playable[0])
-//             }
-//             Action::TrumpLow => {
-//                 let trumps = game.of_which_suit(player, &playable, 3);
-//                 game.lowest_card_of(player, &trumps).unwrap_or(playable[0])
-//             }
-//             Action::PlayBest => game
-//                 .highest_card_of(player, &playable)
-//                 .unwrap_or(playable[0]),
-//             Action::ComeBest => {
-//                 let state = game.state(player);
-//                 let suit = state.has_highest.iter().position_max().unwrap();
-//                 let suit_ids = game.of_which_suit(player, &playable, suit);
-
-//                 game.highest_card_of(player, &suit_ids)
-//                     .unwrap_or(playable[0])
-//             }
-//         }
-//     }
-
-//     fn q_to_optimal(&self) -> HashMap<GameState, Action> {
-//         let mut optimal_action = HashMap::new();
-//         self.q.iter().for_each(|test| {
-//             optimal_action.insert(
-//                 *test.0,
-//                 *self
-//                     .q
-//                     .get(test.0)
-//                     .unwrap()
-//                     .iter()
-//                     .max_by(|score1, score2| score1.1.partial_cmp(score2.1).unwrap())
-//                     .unwrap()
-//                     .0,
-//             );
-//         });
-
-//         optimal_action
-//     }
-
-//     fn optimal_to_q(&mut self, optimal: HashMap<GameState, Action>) {
-//         self.q = HashMap::new();
-
-//         optimal.iter().for_each(|state_action| {
-//             let mut action_value = HashMap::new();
-//             action_value.insert(*state_action.1, 10.0);
-//             self.q.insert(*state_action.0, action_value);
-//         });
-//     }
-
-//     pub fn save_result(&self, path: String, reduced: bool) {
-//         let serialized = match reduced {
-//             true => {
-//                 let optimal = self.q_to_optimal();
-//                 serde_pickle::to_vec(&optimal, Default::default()).unwrap()
-//             }
-//             false => serde_pickle::to_vec(&self.q, Default::default()).unwrap(),
-//         };
-
-//         let mut file = match File::create(path) {
-//             Ok(it) => it,
-//             Err(_) => return,
-//         };
-
-//         file.write_all(serialized.as_slice()).unwrap();
-//     }
-
-//     pub fn import_from_model(&mut self, path: String, reduced: bool) {
-//         let file = match File::open(path) {
-//             Ok(it) => it,
-//             Err(_) => {
-//                 println!("\x1b[91mCouldn't import that model...\x1b[0m");
-//                 return;
-//             }
-//         };
-
-//         let mut reader = BufReader::new(file);
-//         let mut serialized = Vec::new();
-
-//         reader.read_to_end(&mut serialized).unwrap();
-
-//         if reduced {
-//             let deserialized: HashMap<GameState, Action> =
-//                 serde_pickle::from_slice(&serialized, Default::default()).unwrap();
-
-//             self.optimal_to_q(deserialized);
-//         } else {
-//             let deserialized: Q =
-//                 serde_pickle::from_slice(&serialized, Default::default()).unwrap();
-//             self.q = deserialized;
-//         }
-//     }
-// }
-
-// impl Default for QLearner {
-//     fn default() -> Self {
-//         Self::new(Game::new())
-//     }
-// }
-
-// impl Display for GameState {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         writeln!(f, "has_highest: {:?}", self.has_highest)?;
-//         writeln!(f, "can_follow: {}", self.can_follow)?;
-//         writeln!(f, "have_higher: {}", self.have_higher)?;
-//         writeln!(f, "have_trump: {}", self.have_trump)?;
-//         write!(f, "first_suit: {}", self.first_suit)
-//     }
-// }
-
-// impl Display for Action {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Action::PlayWorst => write!(f, "PlayWorst"),
-//             Action::RaiseLow => write!(f, "RaiseLow"),
-//             Action::RaiseHigh => write!(f, "RaiseHigh"),
-//             Action::TrumpHigh => write!(f, "TrumpHigh"),
-//             Action::TrumpLow => write!(f, "TrumpLow"),
-//             Action::PlayBest => write!(f, "PlayBest"),
-//             Action::ComeBest => write!(f, "ComeBest"),
-//         }
-//     }
-// }
+impl<S> Default for QLearner<S>
+where
+    S: State,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -4,7 +4,8 @@
 use crate::{
     card::Card,
     deck::{CardID, Deck},
-    fortify_old::{GameState, QLearner},
+    fortify::{GameSpace, QLearner},
+    gamestate::{Action, GameState},
     player::Player,
     show,
     suit::Suit,
@@ -118,6 +119,13 @@ impl Game {
 
     pub fn trick(&mut self) -> Result<(), String> {
         if self.table.size() == 4 {
+            // determine winning player, set turn to them
+            self.turn = (self.winner() + self.turn) % 4;
+            
+            // add 1 to the winner's score
+            self.round_scores[self.turn] += 1;
+
+
             let new_trick = self.table.pull_cards(4);
 
             new_trick.iter().for_each(|card| {
@@ -125,11 +133,16 @@ impl Game {
             });
 
             self.tricks.push(new_trick);
+
             Ok(())
         } else {
             Err("There are not exactly four cards on the table.".to_string())
         }
     }
+
+    // fn current_player(&self) -> &Deck {
+    //     &self.players[self.turn]
+    // }
 
     /// Put the card on the table.
     /// Comsumes the card!
@@ -137,6 +150,9 @@ impl Game {
         if self.table.size() < 4 {
             // add the card to the seen pile of cards (for AI card counting)
             self.table.add(card);
+            self.turn += 1;
+            self.turn %= 4;
+
             Ok(())
         } else {
             Err("There are already four cards on the table. Can't play any more.".to_string())
@@ -151,16 +167,13 @@ impl Game {
         show::show_table_wait(&self.table);
     }
 
-    pub fn player_plays(&mut self, player: PlayerID, card: usize) -> Result<(), String> {
-        if player != (self.turn + self.table.size()) % 4 {
-            return Err("The order of playing is incorrect.".to_string());
-        }
-        let alowed = self.alowed_cards(player);
+    pub fn player_plays(&mut self, card: usize) -> Result<(), String> {
+        let alowed = self.alowed_cards();
         if !alowed.contains(&card) {
             return Err("This player is not alowed to play this card.".to_string());
         }
 
-        let played = self.players[player].remove(card);
+        let played = self.players[self.turn].remove(card);
         self.play(played)
     }
 
@@ -174,8 +187,8 @@ impl Game {
     }
 
     /// returns a vector of alowed cards for this player, in this round
-    pub fn alowed_cards(&self, player: PlayerID) -> Vec<usize> {
-        let player = &self.players[player];
+    pub fn alowed_cards(&self) -> Vec<usize> {
+        let player = &self.players[self.turn];
 
         if self.table.size() != 0 && player.can_follow(self.table.card(0).suit) {
             let first_suit = self.table.card(0).suit;
@@ -230,14 +243,16 @@ impl Game {
             .collect()
     }
 
-    fn play_easy(&mut self, player: PlayerID) {
+    fn play_easy(&mut self) {
+        // get player id from the current turn
+        let player = self.turn;
+        
         // get alowed indeces
-        let playable = self.alowed_cards(player);
+        let playable = self.alowed_cards();
 
         if self.table.is_empty() {
             return self
                 .player_plays(
-                    player,
                     self.highest_card_of(player, &playable)
                         .unwrap_or(playable[0]),
                 )
@@ -249,7 +264,6 @@ impl Game {
         if !better_cards.is_empty() {
             return self
                 .player_plays(
-                    player,
                     self.lowest_card_of(player, &better_cards)
                         .unwrap_or(better_cards[0]),
                 )
@@ -258,7 +272,6 @@ impl Game {
 
         // play other card
         self.player_plays(
-            player,
             self.lowest_card_of(player, &playable)
                 .unwrap_or(playable[0]),
         )
@@ -270,7 +283,7 @@ impl Game {
         println!("Press space to enter that card.");
     }
 
-    fn ask_card(&mut self, player: PlayerID) {
+    fn ask_card(&mut self) {
         let stdin = stdin();
         let mut stdout = stdout().into_raw_mode().unwrap();
 
@@ -281,24 +294,22 @@ impl Game {
         let mut wrong_count = 0;
         for c in stdin.keys() {
             {
-                let active_player = &mut self.players[player];
-
                 match c.unwrap() {
                     Key::Char('h') | Key::Left => {
                         wrong_count = 0;
-                        active_player.select_left()
+                        self.players[self.turn].select_left()
                     }
                     Key::Char('j') | Key::Down => {
                         wrong_count = 0;
-                        active_player.select_down()
+                        self.players[self.turn].select_down()
                     }
                     Key::Char('k') | Key::Up => {
                         wrong_count = 0;
-                        active_player.select_up()
+                        self.players[self.turn].select_up()
                     }
                     Key::Char('l') | Key::Right => {
                         wrong_count = 0;
-                        active_player.select_right()
+                        self.players[self.turn].select_right()
                     }
                     Key::Char(' ') => break,
                     _ => {
@@ -312,7 +323,7 @@ impl Game {
             if wrong_count > 0 {
                 self.input_instructions();
             } else {
-                self.show_player_state(player);
+                self.show_player_state();
             }
 
             stdout.activate_raw_mode().unwrap();
@@ -321,27 +332,27 @@ impl Game {
         write!(stdout, "{}", termion::cursor::Show).unwrap();
     }
 
-    fn show_player_state(&mut self, player: PlayerID) {
+    fn show_player_state(&mut self) {
         show::show_table(&self.table);
         show::show_last_non_empty(&self.tricks);
-        println!("Your hand: [Player {player}]");
-        self.players[player].show_cards();
+        println!("Your hand: [Player {}]", self.turn);
+        self.players[self.turn].show_cards();
     }
 
-    fn human_plays(&mut self, player: PlayerID) {
+    fn human_plays(&mut self) {
         // showing what the game looks like atm
-        self.show_player_state(player);
+        self.show_player_state();
         show::wait();
 
         // ask what card to play and check validity
-        let idx: CardID = {
-            let playable = self.alowed_cards(player);
+        let card_id: CardID = {
+            let playable = self.alowed_cards();
 
             loop {
                 // loop until correct card given
-                self.ask_card(player);
+                self.ask_card();
 
-                let i = self.players[player].selected_id();
+                let i = self.players[self.turn].selected_id();
 
                 if playable.contains(&i) {
                     break i;
@@ -351,61 +362,50 @@ impl Game {
             }
         };
 
-        self.player_plays(player, idx)
+        self.player_plays(card_id)
             .expect("human player should be alowed to play selected card");
     }
 
-    fn ai_plays(&mut self, player: PlayerID, learner: &mut QLearner, slow: bool) {
-        let mut best_action = *learner.best_action_score(&self.state(player)).0;
-        let alowed = learner.alowed_actions(self, player);
+    fn ai_plays(&mut self, learner: &mut QLearner<GameState>) {
+        let mut best_action = *learner.best_action_score(&self.state()).0;
+        let alowed = self.actions();
 
         if !alowed.iter().any(|a| *a == best_action) {
             best_action = alowed[0];
         }
 
-        let best_card_id = learner.action_card_id(&best_action, self, player);
+        let best_card_id = self.action_card_id(&best_action);
 
-        self.player_plays(player, best_card_id)
+        self.player_plays(best_card_id)
             .expect("ai should be alowed to play selected card");
-
-        if slow {
-            show::show_table_wait(&self.table);
-        }
     }
 
     /// a simple rule based AI plays a card given the current situation.
-    fn rulebased_plays(&mut self, player: PlayerID) {
-        self.play_easy(player);
-
-        // show::show_table_wait(&self.table);
+    fn rulebased_plays(&mut self) {
+        self.play_easy();
     }
 
-    pub fn play_round(&mut self, learner: &mut QLearner) {
-        for i in self.turn..self.turn + 4 {
-            let player = i % 4;
-
-            if player < self.human_players {
-                self.human_plays(player);
-
+    pub fn play_round(&mut self, learner: &mut QLearner<GameState>) {
+        for _ in 0..4 {
+            if self.turn < self.human_players {
+                self.human_plays();
                 show::show_table_wait(&self.table);
             } else {
-                self.ai_plays(player, learner, true);
+                self.ai_plays(learner);
+                show::show_table_wait(&self.table);
             }
         }
-
-        self.turn = (self.winner() + self.turn) % 4;
-        self.round_scores[self.turn] += 1;
+        
+        self.trick().expect("Couldn't play trick in play_round");
 
         show::winner(self.turn);
         show::wait();
-
-        self.trick().expect("Couldn't play trick in play_round");
     }
 
-    pub fn agent_plays_round(&mut self, card: CardID, learner: &mut QLearner) {
+    pub fn agent_plays_round(&mut self, card: CardID) {
         let mut plyr = 0;
 
-        self.player_plays(plyr, card)
+        self.player_plays(card)
             .expect("agent should be alowed to play selected card");
 
         loop {
@@ -414,11 +414,9 @@ impl Game {
             }
 
             plyr += 1;
-            self.ai_plays(plyr, learner, false);
+            self.rulebased_plays();
         }
 
-        self.turn = (self.winner() + self.turn) % 4;
-        self.round_scores[self.turn] += 1;
         self.trick().expect("Couldn't play trick in play_round");
 
         if self.tricks.len() == 13 {
@@ -431,98 +429,13 @@ impl Game {
                 break;
             }
 
-            self.ai_plays(plyr, learner, false);
+            self.rulebased_plays();
             plyr += 1;
         }
-    }
-
-    pub fn agent_plays_round_easy(&mut self, card: CardID) {
-        let mut plyr = 0;
-
-        self.player_plays(plyr, card)
-            .expect("agent should be alowed to play selected card");
-
-        loop {
-            if self.table.size() == 4 {
-                break;
-            }
-
-            plyr += 1;
-            self.rulebased_plays(plyr);
-        }
-
-        self.turn = (self.winner() + self.turn) % 4;
-        self.round_scores[self.turn] += 1;
-        self.trick().expect("Couldn't play trick in play_round");
-
-        if self.tricks.len() == 13 {
-            self.new_round();
-        }
-
-        plyr = self.turn;
-        loop {
-            if plyr % 4 == 0 {
-                break;
-            }
-
-            self.rulebased_plays(plyr);
-            plyr += 1;
-        }
-    }
-
-    pub fn agent_plays_round_slowly(&mut self, card: CardID, learner: &mut QLearner) {
-        self.players[0].set_selected(card);
-
-        let mut plyr = 0;
-
-        println!(
-            "agent played card {}",
-            self.players.get(0).unwrap().card(card)
-        );
-        self.player_plays(plyr, card)
-            .expect("agent should be alowed to play selected card");
-
-        loop {
-            if self.table.size() == 4 {
-                break;
-            }
-
-            plyr += 1;
-            self.ai_plays(plyr, learner, true);
-        }
-
-        self.turn = (self.winner() + self.turn) % 4;
-        self.round_scores[self.turn] += 1;
-        self.trick()
-            .expect("should be able to play trick with four cards");
-
-        if self.tricks.len() == 13 {
-            self.new_round();
-        }
-
-        plyr = self.turn;
-        loop {
-            if plyr % 4 == 0 {
-                break;
-            }
-
-            self.ai_plays(plyr, learner, true);
-            plyr += 1;
-        }
-
-        // self.show_player_state(0);
     }
 
     pub fn show_scores(&self) {
         println!("The scores: {:?}", self.scores);
-    }
-
-    pub fn reward(&self) -> f64 {
-        if self.turn == 0 {
-            1.0
-        } else {
-            0.0
-        }
     }
 
     pub fn can_follow(&self, player: PlayerID) -> bool {
@@ -545,7 +458,90 @@ impl Game {
         println!("Gone Cards:\n{:?}", self.gone_cards);
     }
 
-    pub fn state(&self, player: PlayerID) -> GameState {
+    pub fn action_card_id(&self, action: &Action) -> CardID {
+        let player = self.turn;
+        
+        let playable = self.alowed_cards();
+
+        match action {
+            Action::PlayWorst => self
+                .lowest_card_of(player, &playable)
+                .unwrap_or(playable[0]),
+            Action::RaiseLow => {
+                let better = self.better_cards_of(player, &playable);
+                self.lowest_card_of(player, &better).unwrap_or(playable[0])
+            }
+            Action::RaiseHigh => {
+                let better = self.better_cards_of(player, &playable);
+                self.highest_card_of(player, &better).unwrap_or(playable[0])
+            }
+            Action::TrumpHigh => {
+                let trumps = self.of_which_suit(player, &playable, 3);
+                self.highest_card_of(player, &trumps).unwrap_or(playable[0])
+            }
+            Action::TrumpLow => {
+                let trumps = self.of_which_suit(player, &playable, 3);
+                self.lowest_card_of(player, &trumps).unwrap_or(playable[0])
+            }
+            Action::PlayBest => self
+                .highest_card_of(player, &playable)
+                .unwrap_or(playable[0]),
+            Action::ComeBest => {
+                let state = self.state();
+                let suit = state.has_highest.iter().position_max().unwrap();
+                let suit_ids = self.of_which_suit(player, &playable, suit);
+
+                self.highest_card_of(player, &suit_ids)
+                    .unwrap_or(playable[0])
+            }
+        }
+    }
+}
+
+impl GameSpace<GameState> for Game {
+    fn reward(&self) -> f64 {
+        if self.turn == 0 {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn actions(&self) -> Vec<Action> {
+        let player = self.turn;
+
+        let playable = self.alowed_cards();
+        let better = self.better_cards_of(player, &playable);
+        let state = self.state();
+        let mut alowed: Vec<Action> = Vec::new();
+        let first: bool = state.first_suit == -1;
+
+        if !first {
+            alowed.push(Action::PlayWorst);
+        }
+
+        if first {
+            alowed.push(Action::PlayWorst);
+            if state.has_highest.iter().any(|highest| *highest) {
+                alowed.push(Action::ComeBest);
+            }
+        }
+
+        if self.players[player].can_follow(Suit::Hearts) && (first || !self.can_follow(player)) {
+            alowed.push(Action::TrumpHigh);
+            alowed.push(Action::TrumpLow);
+        }
+
+        if self.can_follow(player) && !better.is_empty() && !first {
+            alowed.push(Action::RaiseLow);
+            alowed.push(Action::RaiseHigh);
+        }
+
+        alowed
+    }
+
+    fn state(&self) -> GameState {
+        let player = self.turn;
         let can_follow: bool = self.can_follow(player);
 
         let mut has_highest = [true; 4];
@@ -558,7 +554,7 @@ impl Game {
             first_suit = first_card_suit as i8;
 
             // determine whether I can go higher than the current winner
-            let playable = self.alowed_cards(player);
+            let playable = self.alowed_cards();
 
             let winner = self.winner();
 
@@ -582,6 +578,8 @@ impl Game {
             }
         }
 
+        
+
         GameState {
             can_follow,
             has_highest,
@@ -589,6 +587,11 @@ impl Game {
             have_higher,
             have_trump,
         }
+    }
+
+    fn take_action(&mut self, action: &Action) {
+        let card_id = self.action_card_id(action);
+        self.agent_plays_round(card_id);
     }
 }
 
@@ -613,7 +616,7 @@ mod tests {
     fn player_plays_alowed_no_err() {
         let mut game = init_game();
 
-        let result = game.player_plays(0, 0);
+        let result = game.player_plays(0);
 
         assert!(result.is_ok());
     }
@@ -622,9 +625,9 @@ mod tests {
     fn player_plays_not_alowed_err() {
         let mut game = init_game();
 
-        game.player_plays(0, 0)
+        game.player_plays(0)
             .expect("testing player should be alowed to play selected card");
-        let alowed = game.alowed_cards(1);
+        let alowed = game.alowed_cards();
         let mut card_id = 0;
         let not_alowed = loop {
             if !alowed.contains(&card_id) {
@@ -632,7 +635,7 @@ mod tests {
             }
             card_id += 1;
         };
-        let result = game.player_plays(1, not_alowed);
+        let result = game.player_plays(not_alowed);
 
         assert!(result.is_err());
     }
@@ -641,11 +644,11 @@ mod tests {
     fn trick_four_cards_no_err() {
         let mut game = init_game();
 
-        game.player_plays(0, 0)
+        game.player_plays(0)
             .expect("testing player should be alowed to play selected card");
-        for plyr in 1..4 {
-            let alowed = game.alowed_cards(plyr);
-            game.player_plays(plyr, alowed[0])
+        for _ in 1..4 {
+            let alowed = game.alowed_cards();
+            game.player_plays(alowed[0])
                 .expect("testing player should be alowed to play selected card");
         }
 
@@ -786,13 +789,11 @@ mod tests {
         .expect("tet player should be alowed to play any first card");
 
         // test for all other players
-        for plyr in 1..4 {
-            if game.players[plyr].can_follow(Suit::Clubs) {
-                assert!(game
-                    .alowed_cards(plyr)
-                    .iter()
-                    .all(|card_id| game.players[plyr].card(*card_id).suit == Suit::Clubs));
-            }
+        if game.players[game.turn].can_follow(Suit::Clubs) {
+            assert!(game
+                .alowed_cards()
+                .iter()
+                .all(|card_id| game.players[game.turn].card(*card_id).suit == Suit::Clubs));
         }
     }
 
@@ -810,7 +811,7 @@ mod tests {
             .expect("tet player should be alowed to play any first card");
 
         for plyr in 1..4 {
-            let playable = &game.alowed_cards(plyr);
+            let playable = &game.alowed_cards();
             assert!(game
                 .better_cards_of(plyr, playable)
                 .iter()
