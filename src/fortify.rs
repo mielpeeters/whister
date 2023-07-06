@@ -58,10 +58,99 @@ pub trait GameSpace<S: State> {
     }
 
     /// performs the action
-    fn take_action(&mut self, action: &S::A);
+    fn take_action(&mut self, action: &S::A,  q: &mut Option<Q<S>>);
 }
 
 pub type Q<S> = HashMap<S, HashMap<<S as State>::A, f64>>;
+
+/// determine the best action in current state, based on the q function
+pub fn best_action_score<S: State>(q: &mut Q<S>, state: &S, initial: f64) -> (S::A, f64) {
+    let best = q
+        .entry(*state)
+        .or_insert_with(|| {
+            let mut new = HashMap::new();
+            new.insert(S::A::default(), initial);
+            new
+        })
+        .iter()
+        .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Equal));
+
+    let result = best.unwrap();
+
+    (*result.0, *result.1)
+}
+
+pub fn q_to_optimal<S: State>(q: &Q<S>) -> HashMap<S, S::A> {
+    let mut optimal_action = HashMap::new();
+    q.iter().for_each(|test| {
+        optimal_action.insert(
+            *test.0,
+            *q
+                .get(test.0)
+                .unwrap()
+                .iter()
+                .max_by(|score1, score2| score1.1.partial_cmp(score2.1).unwrap())
+                .unwrap()
+                .0,
+        );
+    });
+
+    optimal_action
+}
+
+fn optimal_to_q<S: State>(optimal: HashMap<S, S::A>) -> Q<S> {
+    let mut q = HashMap::new();
+
+    optimal.iter().for_each(|state_action| {
+        let mut action_value = HashMap::new();
+        action_value.insert(*state_action.1, 10.0);
+        q.insert(*state_action.0, action_value);
+    });
+    
+    q
+}
+
+pub fn q_to_pickle<S: State>(q: &Q<S>, path: String, reduced: bool) {
+    let serialized = match reduced {
+        true => {
+            let optimal = q_to_optimal(q);
+            serde_pickle::to_vec(&optimal, Default::default()).unwrap()
+        }
+        false => serde_pickle::to_vec(q, Default::default()).unwrap(),
+    };
+
+    let mut file = match File::create(path) {
+        Ok(it) => it,
+        Err(_) => return,
+    };
+
+    file.write_all(serialized.as_slice()).unwrap();
+}
+
+pub fn pickle_to_q<S: State>(path: String, reduced: bool) -> Option<Q<S>> {
+    let file = match File::open(path) {
+        Ok(it) => it,
+        Err(_) => {
+            return None
+        }
+    };
+
+    let mut reader = BufReader::new(file);
+    let mut serialized = Vec::new();
+
+    reader.read_to_end(&mut serialized).unwrap();
+
+    if reduced {
+        let deserialized: HashMap<S, S::A> =
+            serde_pickle::from_slice(&serialized, Default::default()).unwrap();
+
+        Some(optimal_to_q(deserialized))
+    } else {
+        let deserialized: Q<S> =
+            serde_pickle::from_slice(&serialized, Default::default()).unwrap();
+        Some(deserialized)
+    }
+}
 
 pub struct QLearner<S>
 where
@@ -98,7 +187,9 @@ where
         learner
     }
 
-    pub fn train(&mut self, game: &mut dyn GameSpace<S>) {
+    pub fn train(&mut self, game: &mut dyn GameSpace<S>, opponent: String) {
+        let mut oppon = pickle_to_q(opponent, false);
+
         let pb = ProgressBar::new(self.iterations);
         pb.set_style(
             ProgressStyle::with_template("  {bar:40.green/black}   {pos} / {len}   eta: {eta}")
@@ -112,11 +203,11 @@ where
             // determine a new action to take, from current state
             let action = self.new_action(game);
 
-            game.take_action(&action);
+            game.take_action(&action, &mut oppon);
 
             // reward is the reward that's coupled with this action
             let reward = game.reward();
-            let best_future = *self.best_action_score(&game.state()).1;
+            let best_future = best_action_score(&mut self.q, &game.state(), self.initial_value).1;
 
             // new value to assign to Q(s,a)
             let v: f64 = {
@@ -146,22 +237,6 @@ where
         pb.finish();
     }
 
-    /// determine the best action in current state, based on the q function
-    pub fn best_action_score(&mut self, state: &S) -> (&S::A, &f64) {
-        let best = self
-            .q
-            .entry(*state)
-            .or_insert_with(|| {
-                let mut new = HashMap::new();
-                new.insert(S::A::default(), self.initial_value);
-                new
-            })
-            .iter()
-            .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Equal));
-
-        best.unwrap()
-    }
-
     /// determine the action the agent takes while exploring the statespace
     fn new_action(&mut self, game: &dyn GameSpace<S>) -> S::A {
         let alowed = game.actions();
@@ -171,87 +246,23 @@ where
         let explore_factor: f64 =
             100.0 * (self.iterations as f64 - self.current_iter as f64) / (self.iterations as f64);
 
-        let best = self.best_action_score(&game.state());
+        let best = best_action_score(&mut self.q, &game.state(), self.initial_value);
 
-        if alowed.contains(best.0) && exploit_factor > max(explore_factor as u64, 50) {
+        if alowed.contains(&best.0) && exploit_factor > max(explore_factor as u64, 50) {
             // EXPLOIT
-            return *best.0;
+            return best.0;
         }
 
         // EXPLORE
         game.random_action()
     }
 
-    fn q_to_optimal(&self) -> HashMap<S, S::A> {
-        let mut optimal_action = HashMap::new();
-        self.q.iter().for_each(|test| {
-            optimal_action.insert(
-                *test.0,
-                *self
-                    .q
-                    .get(test.0)
-                    .unwrap()
-                    .iter()
-                    .max_by(|score1, score2| score1.1.partial_cmp(score2.1).unwrap())
-                    .unwrap()
-                    .0,
-            );
-        });
-
-        optimal_action
+    pub fn get_q(&self) -> Q<S> {
+        self.q.clone()
     }
 
-    fn optimal_to_q(&mut self, optimal: HashMap<S, S::A>) {
-        self.q = HashMap::new();
-
-        optimal.iter().for_each(|state_action| {
-            let mut action_value = HashMap::new();
-            action_value.insert(*state_action.1, 10.0);
-            self.q.insert(*state_action.0, action_value);
-        });
-    }
-
-    pub fn save_result(&self, path: String, reduced: bool) {
-        let serialized = match reduced {
-            true => {
-                let optimal = self.q_to_optimal();
-                serde_pickle::to_vec(&optimal, Default::default()).unwrap()
-            }
-            false => serde_pickle::to_vec(&self.q, Default::default()).unwrap(),
-        };
-
-        let mut file = match File::create(path) {
-            Ok(it) => it,
-            Err(_) => return,
-        };
-
-        file.write_all(serialized.as_slice()).unwrap();
-    }
-
-    pub fn import_from_model(&mut self, path: String, reduced: bool) {
-        let file = match File::open(path) {
-            Ok(it) => it,
-            Err(_) => {
-                println!("\x1b[91mCouldn't import that model...\x1b[0m");
-                return;
-            }
-        };
-
-        let mut reader = BufReader::new(file);
-        let mut serialized = Vec::new();
-
-        reader.read_to_end(&mut serialized).unwrap();
-
-        if reduced {
-            let deserialized: HashMap<S, S::A> =
-                serde_pickle::from_slice(&serialized, Default::default()).unwrap();
-
-            self.optimal_to_q(deserialized);
-        } else {
-            let deserialized: Q<S> =
-                serde_pickle::from_slice(&serialized, Default::default()).unwrap();
-            self.q = deserialized;
-        }
+    pub fn set_q(&mut self, q: Q<S>) {
+        self.q = q;
     }
 }
 

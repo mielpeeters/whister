@@ -1,6 +1,6 @@
 use text_io::read;
 use whister::{
-    fortify::{QLearner, GameSpace},
+    fortify::{self, GameSpace, QLearner},
     game::Game,
     gamestate::GameState,
 };
@@ -20,14 +20,24 @@ fn main() {
     learner = QLearner::new_with_iter(iterations);
 
     if from_model != "n" {
-        learner.import_from_model(from_model, false);
+        learner.set_q(
+            fortify::pickle_to_q(from_model, false)
+                .expect("Should give a proper model (relative) path that exists"),
+        );
     }
 
-    learner.train(&mut Game::new());
+    // extend training based on an existing model or start over
+    print!("Self play against model? [modelname/n]: \x1b[1m");
+    let opponent: String = read!();
+    print!("\x1b[0m");
+
+    learner.train(&mut Game::new(), opponent);
+
+    let mut q = learner.get_q();
 
     loop {
         for _ in 0..40001 {
-            let mut best_action = *learner.best_action_score(&game.state()).0;
+            let mut best_action = fortify::best_action_score(&mut q, &game.state(), 0.0).0;
             let alowed = game.actions();
 
             if !alowed.iter().any(|a| *a == best_action) {
@@ -36,7 +46,7 @@ fn main() {
 
             let best_card_id = game.action_card_id(&best_action);
 
-            game.agent_plays_round(best_card_id);
+            game.agent_plays_round(best_card_id, &mut None);
         }
 
         game.show_scores();
@@ -55,5 +65,5 @@ fn main() {
         return;
     }
 
-    learner.save_result(answer, false);
+    fortify::q_to_pickle(&q, answer, false);
 }

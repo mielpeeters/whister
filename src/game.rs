@@ -4,7 +4,7 @@
 use crate::{
     card::Card,
     deck::{CardID, Deck},
-    fortify::{GameSpace, QLearner},
+    fortify::{GameSpace, self, Q},
     gamestate::{Action, GameState},
     player::Player,
     show,
@@ -368,8 +368,8 @@ impl Game {
             .expect("human player should be alowed to play selected card");
     }
 
-    fn ai_plays(&mut self, learner: &mut QLearner<GameState>) {
-        let mut best_action = *learner.best_action_score(&self.state()).0;
+    fn ai_plays(&mut self, q: &mut Q<GameState>) {
+        let mut best_action = fortify::best_action_score(q, &self.state(), 0.0).0;
         let alowed = self.actions();
 
         if !alowed.iter().any(|a| *a == best_action) {
@@ -387,14 +387,26 @@ impl Game {
         self.play_easy();
     }
 
-    pub fn play_round(&mut self, learner: &mut QLearner<GameState>) {
-        for _ in 0..4 {
-            if self.turn < self.human_players {
-                self.human_plays();
-                show::show_table_wait(&self.table);
-            } else {
-                self.ai_plays(learner);
-                show::show_table_wait(&self.table);
+    pub fn play_round(&mut self, q: &mut Option<Q<GameState>>) {
+        if let Some(q) = q {
+            for _ in 0..4 {
+                if self.turn < self.human_players {
+                    self.human_plays();
+                    show::show_table_wait(&self.table);
+                } else {
+                    self.ai_plays(q);
+                    show::show_table_wait(&self.table);
+                }
+            }
+        } else {
+            for _ in 0..4 {
+                if self.turn < self.human_players {
+                    self.human_plays();
+                    show::show_table_wait(&self.table);
+                } else {
+                    self.rulebased_plays();
+                    show::show_table_wait(&self.table);
+                }
             }
         }
 
@@ -404,32 +416,58 @@ impl Game {
         show::wait();
     }
 
-    pub fn agent_plays_round(&mut self, card: CardID) {
+    pub fn agent_plays_round(&mut self, card: CardID, q: &mut Option<Q<GameState>>) {
         self.player_plays(card)
             .expect("agent should be alowed to play selected card");
 
-        loop {
-            if self.table.size() == 4 {
-                break;
+        if let Some(q) = q {
+            loop {
+                if self.table.size() == 4 {
+                    break;
+                }
+    
+                self.ai_plays(q);
             }
-
-            self.rulebased_plays();
-        }
-
-        self.trick()
-            .expect("Should finish trick in agent_plays_round");
-
-        if self.tricks.len() == 13 {
-            self.new_round();
-        }
-
-        loop {
-            if self.turn == 0 {
-                break;
+    
+            self.trick()
+                .expect("Should finish trick in agent_plays_round");
+    
+            if self.tricks.len() == 13 {
+                self.new_round();
             }
-
-            self.rulebased_plays();
+    
+            loop {
+                if self.turn == 0 {
+                    break;
+                }
+    
+                self.ai_plays(q);
+            }
+        } else {
+            loop {
+                if self.table.size() == 4 {
+                    break;
+                }
+    
+                self.rulebased_plays();
+            }
+    
+            self.trick()
+                .expect("Should finish trick in agent_plays_round");
+    
+            if self.tricks.len() == 13 {
+                self.new_round();
+            }
+    
+            loop {
+                if self.turn == 0 {
+                    break;
+                }
+    
+                self.rulebased_plays();
+            }
         }
+        
     }
 
     pub fn show_scores(&self) {
@@ -588,9 +626,9 @@ impl GameSpace<GameState> for Game {
         }
     }
 
-    fn take_action(&mut self, action: &Action) {
+    fn take_action(&mut self, action: &Action,  q: &mut Option<Q<GameState>>) {
         let card_id = self.action_card_id(action);
-        self.agent_plays_round(card_id);
+        self.agent_plays_round(card_id, q);
     }
 }
 
