@@ -14,8 +14,9 @@ fn main() {
     let from_model: String = read!();
     print!("\x1b[0m");
 
-    println!("how many iterations?");
+    print!("How many iterations? \x1b[1m");
     let iterations: u64 = read!();
+    print!("\x1b[0m");
     learner = QLearner::new_with_iter(iterations);
 
     if from_model != "n" {

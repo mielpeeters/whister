@@ -36,6 +36,7 @@ pub struct Game {
     human_players: usize,
     round_scores: [u32; 4],
     gone_cards: [[bool; 13]; 4],
+    last_winner: usize,
 }
 
 impl Default for Game {
@@ -70,6 +71,7 @@ impl Game {
             human_players: 0,
             round_scores: [0; 4],
             gone_cards: [[false; 13]; 4],
+            last_winner: 0,
         }
     }
 
@@ -120,13 +122,15 @@ impl Game {
     pub fn trick(&mut self) -> Result<(), String> {
         if self.table.size() == 4 {
             // determine winning player, set turn to them
-            self.turn = (self.winner() + self.turn) % 4;
+            self.turn = (self.winner() + self.last_winner) % 4;
+            self.last_winner = self.turn;
 
             // add 1 to the winner's score
             self.round_scores[self.turn] += 1;
 
             let new_trick = self.table.pull_cards(4);
 
+            // keep track of cards that have been seen on the table (card counting)
             new_trick.iter().for_each(|card| {
                 self.gone_cards[card.suit as usize][(card.score() - 2) as usize] = true;
             });
@@ -149,8 +153,7 @@ impl Game {
         if self.table.size() < 4 {
             // add the card to the seen pile of cards (for AI card counting)
             self.table.add(card);
-            self.turn += 1;
-            self.turn %= 4;
+            self.turn = (self.turn + 1) % 4;
 
             Ok(())
         } else {
@@ -177,7 +180,7 @@ impl Game {
     }
 
     /// returns the winning card index currently on the table
-    fn winner(&self) -> PlayerID {
+    fn winner(&self) -> CardID {
         self.table
             .iter()
             .cloned()
@@ -319,7 +322,7 @@ impl Game {
             stdout.flush().unwrap();
             stdout.suspend_raw_mode().unwrap();
 
-            if wrong_count > 0 {
+            if wrong_count > 1 {
                 self.input_instructions();
             } else {
                 self.show_player_state();
@@ -331,7 +334,7 @@ impl Game {
         write!(stdout, "{}", termion::cursor::Show).unwrap();
     }
 
-    fn show_player_state(&mut self) {
+    pub fn show_player_state(&mut self) {
         show::show_table(&self.table);
         show::show_last_non_empty(&self.tricks);
         println!("Your hand: [Player {}]", self.turn);
@@ -402,8 +405,6 @@ impl Game {
     }
 
     pub fn agent_plays_round(&mut self, card: CardID) {
-        let mut plyr = 0;
-
         self.player_plays(card)
             .expect("agent should be alowed to play selected card");
 
@@ -412,24 +413,22 @@ impl Game {
                 break;
             }
 
-            plyr += 1;
             self.rulebased_plays();
         }
 
-        self.trick().expect("Couldn't play trick in play_round");
+        self.trick()
+            .expect("Should finish trick in agent_plays_round");
 
         if self.tricks.len() == 13 {
             self.new_round();
         }
 
-        plyr = self.turn;
         loop {
-            if plyr % 4 == 0 {
+            if self.turn == 0 {
                 break;
             }
 
             self.rulebased_plays();
-            plyr += 1;
         }
     }
 
@@ -499,7 +498,7 @@ impl Game {
 
 impl GameSpace<GameState> for Game {
     fn reward(&self) -> f64 {
-        if self.turn == 0 {
+        if self.last_winner == 0 {
             1.0
         } else {
             0.0
@@ -507,26 +506,25 @@ impl GameSpace<GameState> for Game {
     }
 
     fn actions(&self) -> Vec<Action> {
+        let mut alowed: Vec<Action> = Vec::new();
+
         let player = self.turn;
 
         let playable = self.alowed_cards();
         let better = self.better_cards_of(player, &playable);
+
         let state = self.state();
-        let mut alowed: Vec<Action> = Vec::new();
         let first: bool = state.first_suit == -1;
 
-        if !first {
-            alowed.push(Action::PlayWorst);
+        alowed.push(Action::PlayWorst);
+
+        if first && state.has_highest.iter().any(|h| *h) {
+            alowed.push(Action::ComeBest);
         }
 
-        if first {
-            alowed.push(Action::PlayWorst);
-            if state.has_highest.iter().any(|highest| *highest) {
-                alowed.push(Action::ComeBest);
-            }
-        }
-
-        if self.players[player].can_follow(Suit::Hearts) && (first || !self.can_follow(player)) {
+        if self.players[player].can_follow(Suit::Hearts)
+            && (first || !self.can_follow(player) || state.first_suit == 3)
+        {
             alowed.push(Action::TrumpHigh);
             alowed.push(Action::TrumpLow);
         }
@@ -541,6 +539,7 @@ impl GameSpace<GameState> for Game {
 
     fn state(&self) -> GameState {
         let player = self.turn;
+
         let can_follow: bool = self.can_follow(player);
 
         let mut has_highest = [true; 4];

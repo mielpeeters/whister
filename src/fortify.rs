@@ -151,10 +151,9 @@ where
         let best = self
             .q
             .entry(*state)
-            // .or_insert_with(|| HashMap::new().insert(&Default::default(), &0.0))
             .or_insert_with(|| {
                 let mut new = HashMap::new();
-                new.insert(S::A::default(), 0.0);
+                new.insert(S::A::default(), self.initial_value);
                 new
             })
             .iter()
@@ -174,16 +173,13 @@ where
 
         let best = self.best_action_score(&game.state());
 
-        if alowed.contains(best.0) && exploit_factor > max(explore_factor as u64, 20) {
+        if alowed.contains(best.0) && exploit_factor > max(explore_factor as u64, 50) {
             // EXPLOIT
             return *best.0;
         }
 
         // EXPLORE
-
-        let num = rand::thread_rng().gen_range(0..alowed.len());
-
-        *alowed.get(num).unwrap()
+        game.random_action()
     }
 
     fn q_to_optimal(&self) -> HashMap<S, S::A> {
