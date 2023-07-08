@@ -13,6 +13,7 @@ pub struct GameState {
     pub first_suit: i8,
     pub has_highest: [bool; 4],
     pub have_trump: bool,
+    pub nb_cards: usize
 }
 
 /// All possible actions that the agent can take.

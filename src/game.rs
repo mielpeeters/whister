@@ -688,6 +688,8 @@ impl GameSpace<GameState> for Game {
         let mut have_higher = true;
         let have_trump = self.players[player].can_follow(Suit::Hearts);
 
+        let nb_cards = 0;//self.players[player].size();
+
         if !self.first() {
             let first_card_suit = self.table.card(0).suit;
             first_suit = first_card_suit as i8;
@@ -726,6 +728,7 @@ impl GameSpace<GameState> for Game {
             first_suit,
             have_higher,
             have_trump,
+            nb_cards
         }
     }
 
