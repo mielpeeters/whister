@@ -21,7 +21,7 @@ fn main() {
 
     if from_model != "n" {
         learner.set_q(
-            fortify::pickle_to_q(from_model, false)
+            fortify::pickle_to_q(from_model.as_str(), false)
                 .expect("Should give a proper model (relative) path that exists"),
         );
     }

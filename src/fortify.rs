@@ -125,7 +125,7 @@ pub fn q_to_pickle<S: State>(q: &Q<S>, path: String, reduced: bool) {
     file.write_all(serialized.as_slice()).unwrap();
 }
 
-pub fn pickle_to_q<S: State>(path: String, reduced: bool) -> Option<Q<S>> {
+pub fn pickle_to_q<S: State>(path: &str, reduced: bool) -> Option<Q<S>> {
     let file = match File::open(path) {
         Ok(it) => it,
         Err(_) => return None,

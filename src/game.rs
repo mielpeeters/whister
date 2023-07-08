@@ -1,6 +1,65 @@
-/*!
- * This module defines a game of colour whist, which consists of tricks and the current table
- */
+//!
+//! This module defines a game of colour whist, which consists of tricks and the current table
+//! 
+//! # Example Usage
+//! You can play a whister game like this:
+//! ```no_run
+//! # use whister::game::Game;
+//! #
+//! let mut game = Game::new();
+//! game.add_human_players(1).unwrap();
+//! 
+//! // example: three rounds
+//! let mut count = 3;
+//! loop {
+//!     if count == 0 {
+//!         break;
+//!     }
+//!     count -= 1;
+//!     
+//!     for _ in 0..13 {
+//!         // None supplied for just a simple rule-based opponent
+//!         game.play_round(&None);
+//!     }
+//!     
+//!     // start a new round
+//!     game.new_round();
+//! }
+//! ```
+//! 
+//! # Playing against a trained AI model
+//! For this, you need to use a `.pkl` file, a serialized fortify::Q object.
+//! These are supplied on the github in the `data/` directory, 
+//! or can be trained using the `fortify` module.
+//! 
+//! for example:
+//! ```no_run
+//! # use whister::game::Game;
+//! use whister::fortify;
+//! let mut game = Game::new();
+//! game.add_human_players(1).unwrap();
+//! 
+//! // the model is deserialized here
+//! let q =  fortify::pickle_to_q("data/whister.pkl", false);
+//! 
+//! // example: three rounds
+//! let mut count = 3;
+//! loop {
+//!     if count == 0 {
+//!         break;
+//!     }
+//!     count -= 1;
+//!     
+//!     for _ in 0..13 {
+//!         // None supplied for just a simple rule-based opponent
+//!         game.play_round(&q);
+//!     }
+//!     
+//!     // start a new round
+//!     game.new_round();
+//! }
+//! ```
+
 use crate::{
     card::Card,
     deck::{CardID, Deck},
@@ -13,7 +72,7 @@ use crate::{
 use itertools::Itertools;
 use std::{
     cmp::Ordering,
-    io::{stdin, stdout, Write},
+    io::{stdin, stdout, Write}, process::exit,
 };
 use termion::event::Key;
 use termion::input::TermRead;
@@ -365,6 +424,9 @@ impl Game {
                         self.players[self.turn].select_right()
                     }
                     Key::Char(' ') => break,
+                    Key::Char('q') => {
+                        exit(0)
+                    },
                     _ => {
                         wrong_count += 1;
                     }

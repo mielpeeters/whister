@@ -17,7 +17,7 @@ fn main() {
     let model_name: String = read!();
     print!("\x1b[0m");
 
-    let q =  fortify::pickle_to_q(model_name, false);
+    let q =  fortify::pickle_to_q(model_name.as_str(), false);
 
     if q.is_none() {
         println!("A rule based opponent will be used!");
