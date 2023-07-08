@@ -4,7 +4,7 @@
 use crate::{
     card::Card,
     deck::{CardID, Deck},
-    fortify::{GameSpace, self, Q},
+    fortify::{self, GameSpace, Q},
     gamestate::{Action, GameState},
     player::Player,
     show,
@@ -280,9 +280,60 @@ impl Game {
         .expect("test");
     }
 
+    fn print_boxed(input: &str, tab: usize) {
+        let width = input.len();
+        println!("{}╭{}╮", " ".repeat(tab), "─".repeat(width));
+        println!("{}│\x1b[1m{}\x1b[0m│", " ".repeat(tab), input);
+        println!("{}╰{}╯", " ".repeat(tab), "─".repeat(width));
+    }
+
+    fn welcome() {
+        Self::print_boxed("Welcome to Whister", 10);
+    }
+
+    pub fn instructions() {
+        Self::welcome();
+        println!();
+
+        println!("Instructions:");
+        println!("- there are 4 players.");
+        println!("- each player plays one card each \"trick\"");
+        println!("- the player that played the highest card wins that trick");
+        println!("- the first card's suit must be \"followed\" if possible");
+        println!("- if not possible (you don't have that suit), you may use any card");
+        println!("- hearts ♥ is the trump, which means that they win from any other suit");
+        println!("- if you can't follow, and don't use a trump, that card is considered lower");
+
+        println!("Summarized:");
+        println!("- Ace > King > ... > 2");
+        println!("- hearts ♥ > {{others}}");
+
+        Self::wait_q();
+    }
+
     fn input_instructions(&self) {
         println!("Press the arrow or vim keys to move the selected card.");
         println!("Press space to enter that card.");
+    }
+
+    fn wait_q() {
+        println!("Press q to continue.");
+
+        let stdin = stdin();
+        let mut stdout = stdout().into_raw_mode().unwrap();
+
+        write!(stdout, "{}", termion::cursor::Hide).unwrap();
+
+        stdout.flush().unwrap();
+
+        for c in stdin.keys() {
+            {
+                if let Key::Char('q') =  c.unwrap() {
+                    break;
+                }
+            }
+        }
+        write!(stdout, "{}", termion::cursor::Show).unwrap();
     }
 
     fn ask_card(&mut self) {
@@ -368,15 +419,27 @@ impl Game {
             .expect("human player should be alowed to play selected card");
     }
 
-    fn ai_plays(&mut self, q: &mut Q<GameState>) {
-        let mut best_action = fortify::best_action_score(q, &self.state(), 0.0).0;
+    pub fn best_card_id_ai(&self, q: &Q<GameState>) -> usize {
+        let mut best_action = {
+            let best = fortify::best_action_score(q, &self.state());
+            if let Ok(best) = best {
+                best.0
+            } else {
+                self.random_action()
+            }
+        };
+
         let alowed = self.actions();
 
         if !alowed.iter().any(|a| *a == best_action) {
             best_action = alowed[0];
         }
 
-        let best_card_id = self.action_card_id(&best_action);
+        self.action_card_id(&best_action)
+    }
+
+    fn ai_plays(&mut self, q: &Q<GameState>) {
+        let best_card_id = self.best_card_id_ai(q);
 
         self.player_plays(best_card_id)
             .expect("ai should be alowed to play selected card");
@@ -387,26 +450,18 @@ impl Game {
         self.play_easy();
     }
 
-    pub fn play_round(&mut self, q: &mut Option<Q<GameState>>) {
-        if let Some(q) = q {
-            for _ in 0..4 {
-                if self.turn < self.human_players {
-                    self.human_plays();
-                    show::show_table_wait(&self.table);
-                } else {
+    pub fn play_round(&mut self, q: &Option<Q<GameState>>) {
+        for _ in 0..4 {
+            if self.turn < self.human_players {
+                self.human_plays();
+                show::show_table_wait(&self.table);
+            } else {
+                if let Some(q) = q {
                     self.ai_plays(q);
-                    show::show_table_wait(&self.table);
-                }
-            }
-        } else {
-            for _ in 0..4 {
-                if self.turn < self.human_players {
-                    self.human_plays();
-                    show::show_table_wait(&self.table);
                 } else {
                     self.rulebased_plays();
-                    show::show_table_wait(&self.table);
                 }
+                show::show_table_wait(&self.table);
             }
         }
 
@@ -416,58 +471,44 @@ impl Game {
         show::wait();
     }
 
-    pub fn agent_plays_round(&mut self, card: CardID, q: &mut Option<Q<GameState>>) {
+    pub fn agent_plays_round(&mut self, card: CardID, q: &Option<&Q<GameState>>) {
         self.player_plays(card)
             .expect("agent should be alowed to play selected card");
 
-        if let Some(q) = q {
-            loop {
-                if self.table.size() == 4 {
-                    break;
-                }
-    
+        // let opponent play until the current trick is full
+        loop {
+            if self.table.size() == 4 {
+                break;
+            }
+
+            if let Some(q) = q {
                 self.ai_plays(q);
-            }
-    
-            self.trick()
-                .expect("Should finish trick in agent_plays_round");
-    
-            if self.tricks.len() == 13 {
-                self.new_round();
-            }
-    
-            loop {
-                if self.turn == 0 {
-                    break;
-                }
-    
-                self.ai_plays(q);
-            }
-        } else {
-            loop {
-                if self.table.size() == 4 {
-                    break;
-                }
-    
-                self.rulebased_plays();
-            }
-    
-            self.trick()
-                .expect("Should finish trick in agent_plays_round");
-    
-            if self.tricks.len() == 13 {
-                self.new_round();
-            }
-    
-            loop {
-                if self.turn == 0 {
-                    break;
-                }
-    
+            } else {
                 self.rulebased_plays();
             }
         }
-        
+
+        // complete the trick
+        self.trick()
+            .expect("Should finish trick in agent_plays_round");
+
+        // start a new round if necessary
+        if self.tricks.len() == 13 {
+            self.new_round();
+        }
+
+        // let first opponents put their cards down, until player 0 is up
+        loop {
+            if self.turn == 0 {
+                break;
+            }
+
+            if let Some(q) = q {
+                self.ai_plays(q);
+            } else {
+                self.rulebased_plays();
+            }
+        }
     }
 
     pub fn show_scores(&self) {
@@ -626,7 +667,7 @@ impl GameSpace<GameState> for Game {
         }
     }
 
-    fn take_action(&mut self, action: &Action,  q: &mut Option<Q<GameState>>) {
+    fn take_action(&mut self, action: &Action, q: &Option<&Q<GameState>>) {
         let card_id = self.action_card_id(action);
         self.agent_plays_round(card_id, q);
     }

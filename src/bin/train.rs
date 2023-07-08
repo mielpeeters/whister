@@ -1,6 +1,6 @@
 use text_io::read;
 use whister::{
-    fortify::{self, GameSpace, QLearner},
+    fortify::{self, QLearner},
     game::Game,
     gamestate::GameState,
 };
@@ -27,26 +27,24 @@ fn main() {
     }
 
     // extend training based on an existing model or start over
-    print!("Self play against model? [modelname/n]: \x1b[1m");
-    let opponent: String = read!();
+    print!("Enable self-play? [y/n]: \x1b[1m");
+    let self_play: String = read!();
     print!("\x1b[0m");
+    if self_play.contains('y') {
+        learner.enable_self_play();
+        println!("-> self play is enabled");
+    }
 
-    learner.train(&mut Game::new(), opponent);
+    learner.train(&mut Game::new());
 
-    let mut q = learner.get_q();
+    let q = learner.get_q();
 
     loop {
         for _ in 0..40001 {
-            let mut best_action = fortify::best_action_score(&mut q, &game.state(), 0.0).0;
-            let alowed = game.actions();
+            let best_card_id = game.best_card_id_ai(&q);
 
-            if !alowed.iter().any(|a| *a == best_action) {
-                best_action = alowed[0];
-            }
-
-            let best_card_id = game.action_card_id(&best_action);
-
-            game.agent_plays_round(best_card_id, &mut None);
+            // play rounds against a rule based opponent
+            game.agent_plays_round(best_card_id, &None);
         }
 
         game.show_scores();

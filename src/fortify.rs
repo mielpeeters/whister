@@ -58,26 +58,25 @@ pub trait GameSpace<S: State> {
     }
 
     /// performs the action
-    fn take_action(&mut self, action: &S::A,  q: &mut Option<Q<S>>);
+    fn take_action(&mut self, action: &S::A, q: &Option<&Q<S>>);
 }
 
 pub type Q<S> = HashMap<S, HashMap<<S as State>::A, f64>>;
 
 /// determine the best action in current state, based on the q function
-pub fn best_action_score<S: State>(q: &mut Q<S>, state: &S, initial: f64) -> (S::A, f64) {
-    let best = q
-        .entry(*state)
-        .or_insert_with(|| {
-            let mut new = HashMap::new();
-            new.insert(S::A::default(), initial);
-            new
-        })
-        .iter()
-        .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Equal));
+pub fn best_action_score<S: State>(q: &Q<S>, state: &S) -> Result<(S::A, f64), String> {
+    let entry = q.get(state);
 
-    let result = best.unwrap();
+    if let Some(entry) = entry {
+        let result = entry
+            .iter()
+            .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Equal));
+        let result = result.unwrap();
 
-    (*result.0, *result.1)
+        return Ok((*result.0, *result.1));
+    }
+
+    Err("There was no entry for this state.".to_string())
 }
 
 pub fn q_to_optimal<S: State>(q: &Q<S>) -> HashMap<S, S::A> {
@@ -85,8 +84,7 @@ pub fn q_to_optimal<S: State>(q: &Q<S>) -> HashMap<S, S::A> {
     q.iter().for_each(|test| {
         optimal_action.insert(
             *test.0,
-            *q
-                .get(test.0)
+            *q.get(test.0)
                 .unwrap()
                 .iter()
                 .max_by(|score1, score2| score1.1.partial_cmp(score2.1).unwrap())
@@ -106,7 +104,7 @@ fn optimal_to_q<S: State>(optimal: HashMap<S, S::A>) -> Q<S> {
         action_value.insert(*state_action.1, 10.0);
         q.insert(*state_action.0, action_value);
     });
-    
+
     q
 }
 
@@ -130,9 +128,7 @@ pub fn q_to_pickle<S: State>(q: &Q<S>, path: String, reduced: bool) {
 pub fn pickle_to_q<S: State>(path: String, reduced: bool) -> Option<Q<S>> {
     let file = match File::open(path) {
         Ok(it) => it,
-        Err(_) => {
-            return None
-        }
+        Err(_) => return None,
     };
 
     let mut reader = BufReader::new(file);
@@ -146,8 +142,7 @@ pub fn pickle_to_q<S: State>(path: String, reduced: bool) -> Option<Q<S>> {
 
         Some(optimal_to_q(deserialized))
     } else {
-        let deserialized: Q<S> =
-            serde_pickle::from_slice(&serialized, Default::default()).unwrap();
+        let deserialized: Q<S> = serde_pickle::from_slice(&serialized, Default::default()).unwrap();
         Some(deserialized)
     }
 }
@@ -162,6 +157,7 @@ where
     initial_value: f64,
     iterations: u64,
     current_iter: u64,
+    self_play: bool,
 }
 
 impl<S> QLearner<S>
@@ -178,7 +174,12 @@ where
             initial_value: 0.5,
             iterations: 100000,
             current_iter: 0,
+            self_play: false
         }
+    }
+
+    pub fn enable_self_play(&mut self) {
+        self.self_play = true;
     }
 
     pub fn new_with_iter(iter: u64) -> Self {
@@ -187,9 +188,7 @@ where
         learner
     }
 
-    pub fn train(&mut self, game: &mut dyn GameSpace<S>, opponent: String) {
-        let mut oppon = pickle_to_q(opponent, false);
-
+    pub fn train(&mut self, game: &mut dyn GameSpace<S>) {
         let pb = ProgressBar::new(self.iterations);
         pb.set_style(
             ProgressStyle::with_template("  {bar:40.green/black}   {pos} / {len}   eta: {eta}")
@@ -203,11 +202,22 @@ where
             // determine a new action to take, from current state
             let action = self.new_action(game);
 
-            game.take_action(&action, &mut oppon);
+            if self.self_play {
+                game.take_action(&action, &Some(&self.q));
+            } else {
+                game.take_action(&action, &None)
+            }
 
             // reward is the reward that's coupled with this action
             let reward = game.reward();
-            let best_future = best_action_score(&mut self.q, &game.state(), self.initial_value).1;
+            let best_future = {
+                let best = best_action_score(&self.q, &game.state());
+                if let Ok(best) = best {
+                    best.1
+                } else {
+                    self.initial_value
+                }
+            };
 
             // new value to assign to Q(s,a)
             let v: f64 = {
@@ -246,11 +256,13 @@ where
         let explore_factor: f64 =
             100.0 * (self.iterations as f64 - self.current_iter as f64) / (self.iterations as f64);
 
-        let best = best_action_score(&mut self.q, &game.state(), self.initial_value);
+        let best = best_action_score(&self.q, &game.state());
 
-        if alowed.contains(&best.0) && exploit_factor > max(explore_factor as u64, 50) {
-            // EXPLOIT
-            return best.0;
+        if let Ok(best) = best {
+            if alowed.contains(&best.0) && exploit_factor > max(explore_factor as u64, 50) {
+                // EXPLOIT
+                return best.0;
+            }
         }
 
         // EXPLORE

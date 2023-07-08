@@ -17,7 +17,7 @@ fn main() {
     let model_name: String = read!();
     print!("\x1b[0m");
 
-    let mut q =  fortify::pickle_to_q(model_name, false);
+    let q =  fortify::pickle_to_q(model_name, false);
 
     if q.is_none() {
         println!("A rule based opponent will be used!");
@@ -25,9 +25,16 @@ fn main() {
         show::wait();
     }
 
+    print!("\nNeed instructions? [y/n]: \x1b[1m");
+    let instr: String = read!();
+    print!("\x1b[0m");
+    if instr.contains('y') {
+        Game::instructions();
+    }
+
     loop {
         for _ in 0..13 {
-            game.play_round(&mut q);
+            game.play_round(&q);
         }
 
         game.new_round();
