@@ -188,10 +188,10 @@ where
         learner
     }
 
-    pub fn train(&mut self, game: &mut impl GameSpace<S>) {
+    pub fn train(&mut self, game: &mut dyn GameSpace<S>) {
         let pb = ProgressBar::new(self.iterations);
         pb.set_style(
-            ProgressStyle::with_template("  {bar:40.green/black}  {pos} / {len}  eta: {eta}")
+            ProgressStyle::with_template("  {bar:40.green/black}   {pos} / {len}   eta: {eta}")
                 .unwrap()
                 .progress_chars("━━─"),
         );
