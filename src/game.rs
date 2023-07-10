@@ -351,9 +351,10 @@ impl Game {
     }
 
     pub fn instructions() {
+        show::clear();
+        
         Self::welcome();
         println!();
-
         println!("Instructions:");
         println!("- there are 4 players.");
         println!("- each player plays one card each \"trick\"");
@@ -362,7 +363,7 @@ impl Game {
         println!("- if not possible (you don't have that suit), you may use any card");
         println!("- hearts ♥ is the trump, which means that they win from any other suit");
         println!("- if you can't follow, and don't use a trump, that card is considered lower");
-
+        println!();
         println!("Summarized:");
         println!("- Ace > King > ... > 2");
         println!("- hearts ♥ > {{others}}");
