@@ -143,7 +143,7 @@ impl Game {
         Ok(self.human_players)
     }
 
-    pub fn new_deal(&mut self) {
+    pub fn new_round(&mut self) {
         let mut deck = Deck::new_full();
         deck.shuffle();
 
@@ -512,35 +512,25 @@ impl Game {
         self.play_easy();
     }
 
-    fn play_rounds(&mut self, q: &Option<Q<GameState>>) {
-        for _ in 0..13 {
-            // play one round
-            for _ in 0..4 {
-                if self.turn < self.human_players {
-                    self.human_plays();
-                    show::show_table_wait(&self.table);
+    pub fn play_round(&mut self, q: &Option<Q<GameState>>) {
+        for _ in 0..4 {
+            if self.turn < self.human_players {
+                self.human_plays();
+                show::show_table_wait(&self.table);
+            } else {
+                if let Some(q) = q {
+                    self.ai_plays(q);
                 } else {
-                    if let Some(q) = q {
-                        self.ai_plays(q);
-                    } else {
-                        self.rulebased_plays();
-                    }
-                    show::show_table_wait(&self.table);
+                    self.rulebased_plays();
                 }
+                show::show_table_wait(&self.table);
             }
-    
-            self.trick().expect("Couldn't play trick in play_round");
-    
-            show::winner(self.turn);
-            show::wait();
         }
-    }
 
-    pub fn play_deal(&mut self, q: &Option<Q<GameState>>) {
-        // bidding
+        self.trick().expect("Couldn't play trick in play_round");
 
-        // play the actual rounds
-        self.play_rounds(q);
+        show::winner(self.turn);
+        show::wait();
     }
 
     pub fn agent_plays_round(&mut self, card: CardID, q: &Option<&Q<GameState>>) {
@@ -566,7 +556,7 @@ impl Game {
 
         // start a new round if necessary
         if self.tricks.len() == 13 {
-            self.new_deal();
+            self.new_round();
         }
 
         // let first opponents put their cards down, until player 0 is up

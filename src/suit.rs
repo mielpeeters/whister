@@ -5,9 +5,7 @@
 use std::fmt;
 use std::slice::Iter;
 
-use serde::{Serialize, Deserialize};
-
-#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash, Debug)]
 pub enum Suit {
     Spades = 0,
     Clubs = 1,
