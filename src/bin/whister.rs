@@ -13,7 +13,7 @@ fn main() {
 
     let mut count = 0;
 
-    print!("\nInsert AI model name (random for rulebased opponent): \x1b[1m");
+    print!("Insert AI model name (random for rulebased opponent): \x1b[1m");
     let model_name: String = read!();
     print!("\x1b[0m");
 
