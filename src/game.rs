@@ -513,6 +513,10 @@ impl Game {
         self.play_easy();
     }
 
+    fn bidding(&mut self) {
+        todo!()
+    }
+
     fn play_rounds(&mut self, q: &Option<Q<GameState>>) {
         for _ in 0..13 {
             // play one round
@@ -539,7 +543,8 @@ impl Game {
 
     pub fn play_deal(&mut self, q: &Option<Q<GameState>>) {
         // bidding
-
+        self.bidding();
+        
         // play the actual rounds
         self.play_rounds(q);
     }
