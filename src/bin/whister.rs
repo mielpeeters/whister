@@ -34,13 +34,13 @@ fn main() {
 
     loop {
         for _ in 0..13 {
-            game.play_round(&q);
+            game.play_deal(&q);
         }
 
-        game.new_round();
+        game.new_deal();
         game.show_scores();
 
-        println!("Play another round? (false / true)");
+        println!("Play another deal? (false / true)");
         let answer: bool = read!();
         if !answer {
             break;
