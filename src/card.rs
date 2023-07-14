@@ -6,6 +6,36 @@ use crate::suit::Suit;
 use std::cmp::Ordering;
 use std::fmt;
 
+/// A playing card, meaning a suit and a number
+/// 
+/// *note: the numbering is 1..14 (14 not included), where 1 represents an Ace, 
+/// which is higher in value than any other number* 
+/// 
+/// different types of ordering are provided, which can be used in
+/// different situations:
+/// 
+/// ```
+/// # use whister::suit::Suit;
+/// # use std::cmp::Ordering;
+/// # use whister::card::Card;
+/// let seven_of_spades = Card {suit: Suit::Spades, number: 7};
+/// let king_of_clubs = Card {suit: Suit::Clubs, number: 1};
+/// 
+/// // using the `winning` comparison with hearts as trump, 
+/// // we see that the seven of spades wins.
+/// // this resembles the situation where the seven is already on the table,
+/// // and the king is placed on it, 
+/// // which means that player can't follow in spades.
+/// let order = seven_of_spades.winning(&king_of_clubs, &Suit::Hearts);
+/// assert!(order == Ordering::Greater);
+/// 
+/// // using the `higher` comparison with hearts as trump, 
+/// // we see that the seven of spades is lower than the king.
+/// // this resembles the situation where player is comparing their own cards,
+/// // to see which might be more valuable.
+/// let order = seven_of_spades.higher(&king_of_clubs, &Suit::Hearts);
+/// assert!(order == Ordering::Less);
+/// ```
 #[derive(Eq, Clone, PartialEq, Hash, Debug)]
 pub struct Card {
     pub suit: Suit,
@@ -13,6 +43,7 @@ pub struct Card {
 }
 
 impl Card {
+    /// Returns the value of the number of this card (to that Ace > King > ...)
     pub fn score(&self) -> u32 {
         if self.number == 1 {
             14
@@ -41,8 +72,9 @@ impl Card {
     /// Determine which card has a higher "value" to the player
     pub fn higher(&self, other: &Card, trump: &Suit) -> Ordering {
         if self.suit != other.suit && self.suit != *trump && other .suit != *trump {
+            // different suits, and none is trump
             self.score().cmp(&other.score())
-        } else {
+        } else { 
             self.winning(other, trump)
         }
     }
@@ -73,7 +105,7 @@ impl fmt::Display for Card {
             "1" => "A".to_string(),
             "10" => "T".to_string(),
             "11" => "J".to_string(),
-            "12" => "D".to_string(),
+            "12" => "Q".to_string(),
             "13" => "K".to_string(),
             &_ => nb,
         };

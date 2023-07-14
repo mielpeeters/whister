@@ -1,12 +1,12 @@
 /*!
- * The four suits of cards: Spades, Clubs, Diamonds and Hearts.
+ * This module describes the four suits of cards: Spades, Clubs, Diamonds and Hearts.
  */
 
 use std::fmt;
 use std::slice::Iter;
-
 use serde::{Serialize, Deserialize};
 
+/// The four suits a card can have. Ordered according to value.
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub enum Suit {
     Spades = 0,

@@ -41,6 +41,9 @@ pub trait State:
 }
 
 pub trait GameSpace<S: State> {
+    /// returns a new gamespace to learn in
+    fn new_space(&self) -> Box<dyn GameSpace<S>>;
+    
     /// determine the reward coupled with getting to the current state
     fn reward(&self) -> f64;
 

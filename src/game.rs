@@ -64,7 +64,7 @@ use crate::{
     card::Card,
     deck::{CardID, Deck},
     fortify::{self, GameSpace, Q},
-    gamestate::{Action, GameState},
+    gamestate::{Action, GameState, BidState},
     player::Player,
     show,
     suit::Suit,
@@ -96,6 +96,8 @@ pub struct Game {
     round_scores: [u32; 4],
     gone_cards: [[bool; 13]; 4],
     last_winner: usize,
+    dealer: usize,
+    bidding: bool,
 }
 
 impl Default for Game {
@@ -131,6 +133,8 @@ impl Game {
             round_scores: [0; 4],
             gone_cards: [[false; 13]; 4],
             last_winner: 0,
+            dealer: 0,
+            bidding: true,
         }
     }
 
@@ -488,11 +492,11 @@ impl Game {
             if let Ok(best) = best {
                 best.0
             } else {
-                self.random_action()
+                <Self as fortify::GameSpace<GameState>>::random_action(self)
             }
         };
 
-        let alowed = self.actions();
+        let alowed = <Self as fortify::GameSpace<GameState>>::actions(self);
 
         if !alowed.iter().any(|a| *a == best_action) {
             best_action = alowed[0];
@@ -514,7 +518,9 @@ impl Game {
     }
 
     fn bidding(&mut self) {
-        todo!()
+        show::dealer(self.dealer);
+
+
     }
 
     fn play_rounds(&mut self, q: &Option<Q<GameState>>) {
@@ -642,7 +648,7 @@ impl Game {
                 .highest_card_of(player, &playable)
                 .unwrap_or(playable[0]),
             Action::ComeBest => {
-                let state = self.state();
+                let state: GameState = self.state();
                 let suit = state.has_highest.iter().position_max().unwrap();
                 let suit_ids = self.of_which_suit(player, &playable, suit);
 
@@ -654,6 +660,10 @@ impl Game {
 }
 
 impl GameSpace<GameState> for Game {
+    fn new_space(&self) -> Box<dyn GameSpace<GameState>> {
+        Box::new(Self::new())
+    }
+    
     fn reward(&self) -> f64 {
         if self.last_winner == 0 {
             1.0
@@ -670,7 +680,7 @@ impl GameSpace<GameState> for Game {
         let playable = self.alowed_cards();
         let better = self.better_cards_of(player, &playable);
 
-        let state = self.state();
+        let state: GameState = self.state();
         let first: bool = state.first_suit == -1;
 
         alowed.push(Action::PlayWorst);
@@ -751,6 +761,34 @@ impl GameSpace<GameState> for Game {
     fn take_action(&mut self, action: &Action, q: &Option<&Q<GameState>>) {
         let card_id = self.action_card_id(action);
         self.agent_plays_round(card_id, q);
+    }
+}
+
+/// WIP
+impl GameSpace<BidState> for Game {
+    fn reward(&self) -> f64 {
+        if self.bidding {
+            0.0
+        } else {
+            // play the game to see whether or not this AI won
+            todo!()
+        }
+    }
+
+    fn actions(&self) -> Vec<<BidState as fortify::State>::A> {
+        todo!()
+    }
+
+    fn state(&self) -> BidState {
+        todo!()
+    }
+
+    fn take_action(&mut self, action: &<BidState as fortify::State>::A, q: &Option<&Q<BidState>>) {
+        todo!()
+    }
+
+    fn new_space(&self) -> Box<dyn GameSpace<BidState>> {
+        todo!()
     }
 }
 

@@ -80,6 +80,10 @@ impl State for GameState {
     type A = Action;
 }
 
+impl State for BidState {
+    type A = Bid;
+}
+
 impl Bid {
     /// match the Bid to get a value which is used for ordering bids
     fn value(&self) -> i8 {
