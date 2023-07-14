@@ -73,7 +73,7 @@ impl fmt::Display for Card {
             "1" => "A".to_string(),
             "10" => "T".to_string(),
             "11" => "J".to_string(),
-            "12" => "D".to_string(),
+            "12" => "Q".to_string(),
             "13" => "K".to_string(),
             &_ => nb,
         };
