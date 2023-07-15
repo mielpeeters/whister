@@ -362,12 +362,15 @@ impl Game {
         println!("- the player that played the highest card wins that trick");
         println!("- the first card's suit must be \"followed\" if possible");
         println!("- if not possible (you don't have that suit), you may use any card");
-        println!("- hearts ♥ is the trump, which means that they win from any other suit");
+        println!(
+            "- hearts {} is the trump, which means that they win from any other suit",
+            Suit::Hearts
+        );
         println!("- if you can't follow, and don't use a trump, that card is considered lower");
         println!();
         println!("Summarized:");
         println!("- Ace > King > ... > 2");
-        println!("- hearts ♥ > {{others}}");
+        println!("- hearts {} > {{{}, {}, {}}}", Suit::Hearts, Suit::Clubs, Suit::Diamonds, Suit::Spades);
         println!();
 
         show::wait_q();
