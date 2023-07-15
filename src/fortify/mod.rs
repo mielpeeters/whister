@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::cmp::{max, Ordering};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::fs::File;
 use std::hash::Hash;
-use std::io::{BufReader, Read, Write};
+
+pub mod data;
 
 pub trait State:
     PartialEq
@@ -77,74 +77,6 @@ pub fn best_action_score<S: State>(q: &Q<S>, state: &S) -> Result<(S::A, f64), S
     }
 
     Err("There was no entry for this state.".to_string())
-}
-
-pub fn q_to_optimal<S: State>(q: &Q<S>) -> HashMap<S, S::A> {
-    let mut optimal_action = HashMap::new();
-    q.iter().for_each(|test| {
-        optimal_action.insert(
-            *test.0,
-            *q.get(test.0)
-                .unwrap()
-                .iter()
-                .max_by(|score1, score2| score1.1.partial_cmp(score2.1).unwrap())
-                .unwrap()
-                .0,
-        );
-    });
-
-    optimal_action
-}
-
-fn optimal_to_q<S: State>(optimal: HashMap<S, S::A>) -> Q<S> {
-    let mut q = HashMap::new();
-
-    optimal.iter().for_each(|state_action| {
-        let mut action_value = HashMap::new();
-        action_value.insert(*state_action.1, 10.0);
-        q.insert(*state_action.0, action_value);
-    });
-
-    q
-}
-
-pub fn q_to_pickle<S: State>(q: &Q<S>, path: String, reduced: bool) {
-    let serialized = match reduced {
-        true => {
-            let optimal = q_to_optimal(q);
-            serde_pickle::to_vec(&optimal, Default::default()).unwrap()
-        }
-        false => serde_pickle::to_vec(q, Default::default()).unwrap(),
-    };
-
-    let mut file = match File::create(path) {
-        Ok(it) => it,
-        Err(_) => return,
-    };
-
-    file.write_all(serialized.as_slice()).unwrap();
-}
-
-pub fn pickle_to_q<S: State>(path: &str, reduced: bool) -> Option<Q<S>> {
-    let file = match File::open(path) {
-        Ok(it) => it,
-        Err(_) => return None,
-    };
-
-    let mut reader = BufReader::new(file);
-    let mut serialized = Vec::new();
-
-    reader.read_to_end(&mut serialized).unwrap();
-
-    if reduced {
-        let deserialized: HashMap<S, S::A> =
-            serde_pickle::from_slice(&serialized, Default::default()).unwrap();
-
-        Some(optimal_to_q(deserialized))
-    } else {
-        let deserialized: Q<S> = serde_pickle::from_slice(&serialized, Default::default()).unwrap();
-        Some(deserialized)
-    }
 }
 
 pub struct QLearner<S>

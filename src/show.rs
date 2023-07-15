@@ -2,7 +2,9 @@
  * This module implements some functions for showing the game state to the player.
  */
 
-use std::{thread, time::Duration};
+use std::{thread, time::Duration, io::{stdin, stdout, Write, self}};
+
+use termion::{raw::IntoRawMode, input::TermRead, event::Key};
 
 use crate::deck::Deck;
 
@@ -41,4 +43,105 @@ pub fn winner(player_id: usize) {
         _ => format!("\x1b[1;91mPlayer {}", player_id),
     });
     clear_fmt();
+}
+
+pub fn wait_q() {
+    println!("\x1b[3mPress [Q] to continue.\x1b[0m");
+
+    let stdin = stdin();
+    let mut stdout = stdout().into_raw_mode().unwrap();
+
+    write!(stdout, "{}", termion::cursor::Hide).unwrap();
+
+    stdout.flush().unwrap();
+
+    for c in stdin.keys() {
+        {
+            if let Key::Char('q') = c.unwrap() {
+                break;
+            }
+        }
+    }
+    write!(stdout, "{}", termion::cursor::Show).unwrap();
+}
+
+pub fn wait_any() {
+    println!("\x1b[3mPress [any key] to continue.\x1b[0m");
+
+    let stdin = stdin();
+    let mut stdout = stdout().into_raw_mode().unwrap();
+
+    write!(stdout, "{}", termion::cursor::Hide).unwrap();
+
+    stdout.flush().unwrap();
+
+    // just wait for one key to be pressed
+    if stdin.keys().next().is_some() {}
+
+    write!(stdout, "{}", termion::cursor::Show).unwrap();
+}
+
+pub fn wait_enter() {
+    println!("\x1b[3mPress [enter key] to continue.\x1b[0m");
+
+    let stdin = stdin();
+    let mut stdout = stdout().into_raw_mode().unwrap();
+
+    write!(stdout, "{}", termion::cursor::Hide).unwrap();
+
+    stdout.flush().unwrap();
+
+    for c in stdin.keys() {
+        if let Key::Char('\n') = c.unwrap() {
+            break;
+        }
+    }
+    write!(stdout, "{}", termion::cursor::Show).unwrap();
+}
+
+/// returns `true` if user entered y, otherwise false
+/// 
+/// `default` is returned when neither y or n is entered
+pub fn yes_or_no(default: bool) -> bool {
+    io::stdout().flush().unwrap();
+    
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(n) => {
+            if n > 0 {
+                if default {
+                    !input.contains('n')
+                } else {
+                    input.contains('y')
+                }
+            } else {
+                default
+            }
+        }
+        Err(_) => default,
+    }
+}
+
+fn without_return(input: &str) -> String {
+    let split: Vec<&str> = input.split('\n').collect();
+    String::from(split[0])
+}
+
+/// returns `true` if user entered y, otherwise false
+/// 
+/// `default` is returned when neither y or n is entered
+pub fn get_answer() -> Option<String> {
+    io::stdout().flush().unwrap();
+    
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(n) => {
+            if n > 0 {
+                Some(without_return(input.as_str()))
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
+    }
 }

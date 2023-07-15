@@ -1,6 +1,6 @@
 //!
 //! This module defines a game of colour whist, which consists of tricks and the current table
-//! 
+//!
 //! # Example Usage
 //! You can play a whister game like this:
 //! ```no_run
@@ -8,7 +8,7 @@
 //! #
 //! let mut game = Game::new();
 //! game.add_human_players(1).unwrap();
-//! 
+//!
 //! // example: three rounds
 //! let mut count = 3;
 //! loop {
@@ -26,22 +26,22 @@
 //!     game.new_round();
 //! }
 //! ```
-//! 
+//!
 //! # Playing against a trained AI model
 //! For this, you need to use a `.pkl` file, a serialized fortify::Q object.
-//! These are supplied on the github in the `data/` directory, 
+//! These are supplied on the github in the `data/` directory,
 //! or can be trained using the `fortify` module.
-//! 
+//!
 //! for example:
 //! ```no_run
 //! # use whister::game::Game;
 //! use whister::fortify;
 //! let mut game = Game::new();
 //! game.add_human_players(1).unwrap();
-//! 
+//!
 //! // the model is deserialized here
 //! let q =  fortify::pickle_to_q("data/whister.pkl", false);
-//! 
+//!
 //! // example: three rounds
 //! let mut count = 3;
 //! loop {
@@ -72,7 +72,8 @@ use crate::{
 use itertools::Itertools;
 use std::{
     cmp::Ordering,
-    io::{stdin, stdout, Write}, process::exit,
+    io::{stdin, stdout, Write},
+    process::exit,
 };
 use termion::event::Key;
 use termion::input::TermRead;
@@ -352,7 +353,7 @@ impl Game {
 
     pub fn instructions() {
         show::clear();
-        
+
         Self::welcome();
         println!();
         println!("Instructions:");
@@ -367,33 +368,14 @@ impl Game {
         println!("Summarized:");
         println!("- Ace > King > ... > 2");
         println!("- hearts ♥ > {{others}}");
+        println!();
 
-        Self::wait_q();
+        show::wait_q();
     }
 
     fn input_instructions(&self) {
-        println!("Press the arrow or vim keys to move the selected card.");
-        println!("Press space to enter that card.");
-    }
-
-    fn wait_q() {
-        println!("Press q to continue.");
-
-        let stdin = stdin();
-        let mut stdout = stdout().into_raw_mode().unwrap();
-
-        write!(stdout, "{}", termion::cursor::Hide).unwrap();
-
-        stdout.flush().unwrap();
-
-        for c in stdin.keys() {
-            {
-                if let Key::Char('q') =  c.unwrap() {
-                    break;
-                }
-            }
-        }
-        write!(stdout, "{}", termion::cursor::Show).unwrap();
+        println!("Press the [arrow keys] (or vim keys) to select a card.");
+        println!("Press [enter] or [space bar] to play that card.");
     }
 
     fn ask_card(&mut self) {
@@ -424,10 +406,12 @@ impl Game {
                         wrong_count = 0;
                         self.players[self.turn].select_right()
                     }
-                    Key::Char(' ') => break,
+                    Key::Char(' ') | Key::Char('\n') => break,
                     Key::Char('q') => {
-                        exit(0)
-                    },
+                        stdout.flush().unwrap();
+                        write!(stdout, "{}", termion::cursor::Show).unwrap();
+                        exit(0);
+                    }
                     _ => {
                         wrong_count += 1;
                     }
@@ -689,7 +673,7 @@ impl GameSpace<GameState> for Game {
         let mut have_higher = true;
         let have_trump = self.players[player].can_follow(Suit::Hearts);
 
-        let nb_cards = 0;//self.players[player].size();
+        let nb_cards = 0; //self.players[player].size();
 
         if !self.first() {
             let first_card_suit = self.table.card(0).suit;
@@ -729,7 +713,7 @@ impl GameSpace<GameState> for Game {
             first_suit,
             have_higher,
             have_trump,
-            nb_cards
+            nb_cards,
         }
     }
 
