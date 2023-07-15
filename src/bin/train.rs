@@ -2,35 +2,29 @@ use text_io::read;
 use whister::{
     fortify::{self, QLearner},
     game::Game,
-    gamestate::GameState,
+    gamestate::GameState, show,
 };
 
 fn main() {
     let mut learner: QLearner<GameState>;
     let mut game: Game = Game::new();
 
-    // extend training based on an existing model or start over
-    print!("Start from existing model? [modelname/n]: \x1b[1m");
-    let from_model: String = read!();
-    print!("\x1b[0m");
+    let q = fortify::data::select_model(true);
 
     print!("How many iterations? \x1b[1m");
     let iterations: u64 = read!();
     print!("\x1b[0m");
     learner = QLearner::new_with_iter(iterations);
 
-    if from_model != "n" {
-        learner.set_q(
-            fortify::pickle_to_q(from_model.as_str(), false)
-                .expect("Should give a proper model (relative) path that exists"),
-        );
+    if let Some(q) = q {
+        learner.set_q(q);
     }
 
     // extend training based on an existing model or start over
-    print!("Enable self-play? [y/n]: \x1b[1m");
-    let self_play: String = read!();
+    print!("Enable self-play? [Y/n]: \x1b[1m");
+    let answer = show::yes_or_no(true);
     print!("\x1b[0m");
-    if self_play.contains('y') {
+    if answer {
         learner.enable_self_play();
         println!("-> self play is enabled");
     }
@@ -49,19 +43,23 @@ fn main() {
 
         game.show_scores();
 
-        println!("Play another round? [y/n]");
-        let answer: String = read!();
-        let answer: bool = matches!(answer.as_str(), "y");
+        print!("Play another round? [y/N]: \x1b[1m");
+        let answer = show::yes_or_no(false);
+        print!("\x1b[0m");
         if !answer {
             break;
         }
     }
 
-    println!("Save this model? [modelname/n]");
-    let answer: String = read!();
-    if answer == "n" {
-        return;
-    }
+    print!("Save this model? [modelname/N]: \x1b[1m");
+    let answer = show::get_answer();
+    print!("\x1b[0m");
+    if let Some(answer) = answer {
+        if answer == "N" || answer == "n" || answer.is_empty() {
+            return
+        }
+        println!("Saving model as \x1b[3m{:?}\x1b[0m", answer);
+        fortify::data::q_to_pickle(&q, answer, false).expect("Should be able to save");
+    } 
 
-    fortify::q_to_pickle(&q, answer, false);
 }

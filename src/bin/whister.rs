@@ -1,23 +1,19 @@
 /*!
 This crate implements an AI which plays Colour Whist (nl: Kleurenwiezen).
 */
-use text_io::read;
 use whister::{
     fortify,
     game::Game, show,
 };
 
 fn main() {
+    show::clear();
     let mut game = Game::new();
     game.add_human_players(1).unwrap();
 
     let mut count = 0;
 
-    print!("Insert AI model name (random for rulebased opponent): \x1b[1m");
-    let model_name: String = read!();
-    print!("\x1b[0m");
-
-    let q =  fortify::pickle_to_q(model_name.as_str(), false);
+    let q = fortify::data::select_model(false);
 
     if q.is_none() {
         println!("A rule based opponent will be used!");
@@ -25,23 +21,24 @@ fn main() {
         show::wait();
     }
 
-    print!("\nNeed instructions? [y/n]: \x1b[1m");
-    let instr: String = read!();
+    print!("\nNeed instructions? [Y/n]: \x1b[1m");
+    let answer = show::yes_or_no(true);
     print!("\x1b[0m");
-    if instr.contains('y') {
+    if answer {
         Game::instructions();
     }
 
     loop {
         for _ in 0..13 {
-            game.play_deal(&q);
+            game.play_round(&q);
         }
 
-        game.new_deal();
+        game.new_round();
         game.show_scores();
 
-        println!("Play another deal? (false / true)");
-        let answer: bool = read!();
+        print!("Play another round? [Y/n]: \x1b[1m");
+        let answer = show::yes_or_no(true);
+        print!("\x1b[0m");
         if !answer {
             break;
         }

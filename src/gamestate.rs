@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{fortify::State, suit::Suit};
+use crate::fortify::State;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct GameState {
@@ -13,15 +13,13 @@ pub struct GameState {
     pub first_suit: i8,
     pub has_highest: [bool; 4],
     pub have_trump: bool,
-    pub nb_cards: usize,
+    pub nb_cards: usize
 }
 
 /// All possible actions that the agent can take.
 /// Technically, the action could be described as just a Card, but
 /// these are realistic moves for many scenarios, to reduce the state-action space.
-#[derive(
-    Hash, PartialEq, Eq, Debug, PartialOrd, Ord, Serialize, Deserialize, Copy, Clone, Default,
-)]
+#[derive(Hash, PartialEq, Eq, Debug, PartialOrd, Ord, Serialize, Deserialize, Copy, Clone, Default)]
 pub enum Action {
     #[default]
     /// play the lowest card you can
@@ -38,42 +36,6 @@ pub enum Action {
     PlayBest,
     /// come out with a card you know is the best
     ComeBest,
-}
-
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct BidState {}
-
-/// The types of bidding a player can choose from
-#[derive(Hash, PartialEq, Eq, Debug, Serialize, Deserialize, Copy, Clone, Default)]
-pub enum Bid {
-    #[default]
-    // don't join or start a contract
-    Pass,
-    // only player left of dealer, wait and decide to accept or not
-    Wait,
-    // start a contract in a new suit
-    // 8 or more, with a partner
-    Propose(Suit),
-    // accept an open contract
-    Accept(Suit, u8),
-    // go solo, only if no others left to accept or when others passed
-    Solo(Suit, u8),
-    // get no tricks, put away one card
-    SmallMisery,
-    // get no tricks with all cards
-    LargeMisery,
-    // get no tricks with open cards
-    OpenMisery,
-    // 9 or more tricks solo
-    // only as a first bid
-    Abondance(Suit, u8),
-    // 13 tricks solo, for real mad lads
-    // only as a first bid
-    SoloSlim(Suit),
-    // accepted and at least 11 tricks bid, proposer continues to bid
-    PassParole,
-    // three or four aces dealt to one player
-    Trull,
 }
 
 impl State for GameState {
