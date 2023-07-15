@@ -29,9 +29,7 @@ fn main() {
     }
 
     loop {
-        for _ in 0..13 {
-            game.play_round(&q);
-        }
+        game.play_deal(&q);
 
         game.new_round();
         game.show_scores();
