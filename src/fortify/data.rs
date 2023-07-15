@@ -134,7 +134,7 @@ pub fn pickle_to_q<S: State>(name: &str, reduced: bool) -> Option<Q<S>> {
 
 fn show_selected_model(models: &Vec<String>, selected: usize, new: bool) {
     show::clear();
-    println!("Select the saved model you want to use");
+    println!("Select the saved AI model you want to use");
 
     for (current, model) in models.iter().enumerate() {
         if current == selected {
