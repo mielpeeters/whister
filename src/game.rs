@@ -4,12 +4,12 @@
 //! # Example Usage
 //! You can play a whister game like this:
 //! ```no_run
-//! # use whister::game::Game;
-//! #
+//! use whister::game::Game;
+//! 
 //! let mut game = Game::new();
 //! game.add_human_players(1).unwrap();
 //!
-//! // example: three rounds
+//! // example: three deals
 //! let mut count = 3;
 //! loop {
 //!     if count == 0 {
@@ -17,13 +17,11 @@
 //!     }
 //!     count -= 1;
 //!     
-//!     for _ in 0..13 {
-//!         // None supplied for just a simple rule-based opponent
-//!         game.play_round(&None);
-//!     }
+//!     // None supplied for just a simple rule-based opponent
+//!     game.play_deal(&None);
 //!     
-//!     // start a new round
-//!     game.new_round();
+//!     // start a new deal
+//!     game.new_deal();
 //! }
 //! ```
 //!
@@ -34,15 +32,16 @@
 //!
 //! for example:
 //! ```no_run
-//! # use whister::game::Game;
+//! use whister::game::Game;
 //! use whister::fortify;
+//! 
 //! let mut game = Game::new();
 //! game.add_human_players(1).unwrap();
 //!
-//! // the model is deserialized here
-//! let q =  fortify::pickle_to_q("data/whister.pkl", false);
+//! // the model is deserialized here (example file path)
+//! let q = fortify::data::pickle_to_q("~/.local/share/whister/easy.pkl", false);
 //!
-//! // example: three rounds
+//! // example: three deals
 //! let mut count = 3;
 //! loop {
 //!     if count == 0 {
@@ -50,13 +49,11 @@
 //!     }
 //!     count -= 1;
 //!     
-//!     for _ in 0..13 {
-//!         // None supplied for just a simple rule-based opponent
-//!         game.play_round(&q);
-//!     }
+//!     // None supplied for just a simple rule-based opponent
+//!     game.play_deal(&q);
 //!     
-//!     // start a new round
-//!     game.new_round();
+//!     // start a new deal
+//!     game.new_deal();
 //! }
 //! ```
 
@@ -148,7 +145,7 @@ impl Game {
         Ok(self.human_players)
     }
 
-    pub fn new_round(&mut self) {
+    pub fn new_deal(&mut self) {
         let mut deck = Deck::new_full();
         deck.shuffle();
 
@@ -417,6 +414,7 @@ impl Game {
                     Key::Char('q') => {
                         stdout.flush().unwrap();
                         write!(stdout, "{}", termion::cursor::Show).unwrap();
+                        drop(stdout);
                         exit(0);
                     }
                     _ => {
@@ -507,7 +505,7 @@ impl Game {
     fn bidding(&mut self) {
         show::dealer(self.dealer);
 
-
+        // TODO: implement bidding
     }
 
     fn play_rounds(&mut self, q: &Option<Q<GameState>>) {
@@ -565,7 +563,7 @@ impl Game {
 
         // start a new round if necessary
         if self.tricks.len() == 13 {
-            self.new_round();
+            self.new_deal();
         }
 
         // let first opponents put their cards down, until player 0 is up

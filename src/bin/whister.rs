@@ -31,7 +31,7 @@ fn main() {
     loop {
         game.play_deal(&q);
 
-        game.new_round();
+        game.new_deal();
         game.show_scores();
 
         print!("Play another round? [Y/n]: \x1b[1m");
