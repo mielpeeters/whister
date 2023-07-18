@@ -744,6 +744,14 @@ impl GameSpace<GameState> for Game {
             }
         }
 
+        // compress the four 8bit numbers to four concatenated 2 bit numbers
+        // saves 30% on serialized model size!! 
+        let mut nb_out_of: u8 = 0b00000000;
+        self.nb_cant_follow.iter().enumerate().for_each(|(i, nb)| {
+            // bitwise or with shifted nb
+            nb_out_of |= *nb << (2*i);
+        });
+
         GameState {
             can_follow,
             has_highest,
@@ -751,7 +759,7 @@ impl GameSpace<GameState> for Game {
             have_higher,
             have_trump,
             nb_cards,
-            nb_out_of: self.nb_cant_follow,
+            nb_out_of,
             // nb_out_of: [0; 4],
         }
     }

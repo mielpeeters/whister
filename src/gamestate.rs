@@ -19,9 +19,9 @@ pub struct GameState {
     /// does this player have any trumps left?
     pub have_trump: bool,
     /// how many cards does this player have left?
-    pub nb_cards: usize,
+    pub nb_cards: u8,
     /// how many players are out of which suits?
-    pub nb_out_of: [u8; 4],
+    pub nb_out_of: u8,
 }
 
 /// All possible actions that the agent can take.
