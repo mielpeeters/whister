@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::{Mutex, mpsc, Arc, RwLock};
+use std::sync::{mpsc, Arc, Mutex, RwLock};
 use std::thread;
 
 pub mod data;
@@ -48,7 +48,7 @@ pub trait State:
 pub trait GameSpace<S: State>: Send + Sync {
     /// returns a new gamespace to learn in
     fn new_space(&self) -> Box<dyn GameSpace<S>>;
-    
+
     /// determine the reward coupled with getting to the current state
     fn reward(&self) -> f64;
 
@@ -98,6 +98,8 @@ where
     iterations: u64,
     current_iter: u64,
     self_play: bool,
+    queue_size: usize,
+    verbose: bool,
 }
 
 impl<S> QLearner<S>
@@ -114,7 +116,9 @@ where
             initial_value: 0.5,
             iterations: 100000,
             current_iter: 0,
-            self_play: false
+            self_play: false,
+            queue_size: 500,
+            verbose: true,
         }
     }
 
@@ -122,9 +126,19 @@ where
         self.self_play = true;
     }
 
+    pub fn disable_verbose(&mut self) {
+        self.verbose = false;
+    }
+
     pub fn new_with_iter(iter: u64) -> Self {
         let mut learner = Self::new();
-        learner.iterations = iter;
+
+        if iter > learner.queue_size as u64 {
+            learner.iterations = iter;
+        } else {
+            learner.iterations = learner.queue_size as u64;
+        }
+
         learner
     }
 
@@ -155,7 +169,17 @@ where
         // create a shared ownership Q
         let q = Arc::new(RwLock::new(self.q.clone()));
 
-        for _ in 0..5 {
+        let num_cpu = num_cpus::get();
+
+        let producers = {
+            if num_cpu < 2 {
+                1
+            } else {
+                num_cpu - 1
+            }
+        };
+
+        for _ in 0..producers {
             // clone the tranceiver
             let local_tx = tx.clone();
             // create a new space to learn in
@@ -196,22 +220,21 @@ where
                     };
                 }
             });
-            handles.push(handle);    
+            handles.push(handle);
         }
 
-        let mut rcv_queue = Vec::new(); 
+        let mut rcv_queue = Vec::new();
 
         // consumer loop
-'outer: for rcv in rx {
+        'outer: for rcv in rx {
             rcv_queue.push(rcv);
 
-            if rcv_queue.len() > 20 {
-
+            if rcv_queue.len() == producers * self.queue_size {
                 let mut my_q = q.write().unwrap();
 
-                for rcv in &rcv_queue {
-                    let (current_state, action, reward, best_future) = *rcv;
-        
+                while let Some(rcv) = rcv_queue.pop() {
+                    let (current_state, action, reward, best_future) = rcv;
+
                     // new value to assign to Q(s,a)
                     let v: f64 = {
                         // get the old value of Q(s,a) if it is available
@@ -219,23 +242,25 @@ where
                             .get(&current_state)
                             .and_then(|m| m.get(&action))
                             .unwrap_or(&self.initial_value);
-        
+
                         *old_value + self.rate * (reward + self.discount * best_future - *old_value)
                     };
-        
+
                     my_q.entry(current_state)
                         .or_insert_with(HashMap::new)
                         .insert(action, v);
-        
+
                     self.current_iter += 1;
-                    pb.inc(1);
-        
+
+                    if self.verbose {
+                        pb.inc(1);
+                    }
+
                     if self.current_iter >= self.iterations {
                         break 'outer;
                     }
                 }
             }
-            
         }
 
         for handle in handles {
@@ -244,7 +269,9 @@ where
 
         self.q = q.read().unwrap().clone();
 
-        pb.finish();
+        if self.verbose {
+            pb.finish();
+        }
     }
 
     /// determine the action the agent takes while exploring the statespace
