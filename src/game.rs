@@ -61,7 +61,7 @@ use crate::{
     card::Card,
     deck::{CardID, Deck},
     fortify::{self, GameSpace, Q},
-    gamestate::{Action, GameState, BidState},
+    gamestate::{Action, GameState},
     player::Player,
     show,
     suit::Suit,
@@ -96,6 +96,7 @@ pub struct Game {
     last_winner: usize,
     dealer: usize,
     bidding: bool,
+    nb_cant_follow: [u8; 4],
 }
 
 impl Default for Game {
@@ -133,6 +134,7 @@ impl Game {
             last_winner: 0,
             dealer: 0,
             bidding: true,
+            nb_cant_follow: [0; 4],
         }
     }
 
@@ -191,9 +193,22 @@ impl Game {
 
             let new_trick = self.table.pull_cards(4);
 
+            let mut first_suit: Option<Suit> = None;
+
             // keep track of cards that have been seen on the table (card counting)
+            // & keep track of how many players can't follow in some type
             new_trick.iter().for_each(|card| {
+                if let Some(fs) = first_suit {
+                    // "following" cards (just not the first time)
+                    if card.suit != fs {
+                        self.nb_cant_follow[fs as usize] += 1;
+                    }
+                } else {
+                    first_suit = Some(card.suit);
+                    self.nb_cant_follow[card.suit as usize] = 0;
+                }
                 self.gone_cards[card.suit as usize][(card.score() - 2) as usize] = true;
+
             });
 
             self.tricks.push(new_trick);
@@ -203,10 +218,6 @@ impl Game {
             Err("There are not exactly four cards on the table.".to_string())
         }
     }
-
-    // fn current_player(&self) -> &Deck {
-    //     &self.players[self.turn]
-    // }
 
     /// Put the card on the table.
     /// Comsumes the card!
@@ -740,6 +751,8 @@ impl GameSpace<GameState> for Game {
             have_higher,
             have_trump,
             nb_cards,
+            nb_out_of: self.nb_cant_follow,
+            // nb_out_of: [0; 4],
         }
     }
 
@@ -750,32 +763,32 @@ impl GameSpace<GameState> for Game {
 }
 
 /// WIP
-impl GameSpace<BidState> for Game {
-    fn reward(&self) -> f64 {
-        if self.bidding {
-            0.0
-        } else {
-            // play the game to see whether or not this AI won
-            todo!()
-        }
-    }
+// impl GameSpace<BidState> for Game {
+//     fn reward(&self) -> f64 {
+//         if self.bidding {
+//             0.0
+//         } else {
+//             // play the game to see whether or not this AI won
+//             todo!()
+//         }
+//     }
 
-    fn actions(&self) -> Vec<<BidState as fortify::State>::A> {
-        todo!()
-    }
+//     fn actions(&self) -> Vec<<BidState as fortify::State>::A> {
+//         todo!()
+//     }
 
-    fn state(&self) -> BidState {
-        todo!()
-    }
+//     fn state(&self) -> BidState {
+//         todo!()
+//     }
 
-    fn take_action(&mut self, action: &<BidState as fortify::State>::A, q: &Option<&Q<BidState>>) {
-        todo!()
-    }
+//     fn take_action(&mut self, action: &<BidState as fortify::State>::A, q: &Option<&Q<BidState>>) {
+//         todo!()
+//     }
 
-    fn new_space(&self) -> Box<dyn GameSpace<BidState>> {
-        todo!()
-    }
-}
+//     fn new_space(&self) -> Box<dyn GameSpace<BidState>> {
+//         todo!()
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

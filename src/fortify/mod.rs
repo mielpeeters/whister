@@ -271,6 +271,8 @@ where
 
         if self.verbose {
             pb.finish();
+            println!("\x1b[3m{} states\x1b[0m have been discovered", self.q.keys().len());
+            println!();
         }
     }
 
