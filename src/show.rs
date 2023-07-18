@@ -8,6 +8,16 @@ use termion::{raw::IntoRawMode, input::TermRead, event::Key};
 
 use crate::deck::Deck;
 
+macro_rules! print_player {
+    ($x:expr) => {   
+        print!("{}", match $x {
+            0 => "\x1b[1;92mYou!".to_string(),
+            _ => format!("\x1b[1;91mPlayer {}", $x),
+        });
+        clear_fmt();
+    };
+}
+
 pub fn clear() {
     println!("\x1b[1J\x1b[H");
 }
@@ -27,6 +37,13 @@ pub fn show_table(table: &Deck) {
     println!("Current table: \n{}\n", table);
 }
 
+pub fn dealer(dealer: usize) {
+    clear();
+    print!("The current dealer is Player ");
+    print_player!(dealer);
+    println!("\n");
+}
+
 pub fn wait() {
     thread::sleep(Duration::from_millis(500));
 }
@@ -38,11 +55,9 @@ pub fn show_last_non_empty(deck: &Vec<Deck>) {
 }
 
 pub fn winner(player_id: usize) {
-    println!("Winner this round: {}", match player_id {
-        0 => "\x1b[1;92mYou!".to_string(),
-        _ => format!("\x1b[1;91mPlayer {}", player_id),
-    });
-    clear_fmt();
+    print!("Winner this round: ");
+    print_player!(player_id);
+    println!("\n");
 }
 
 pub fn wait_q() {

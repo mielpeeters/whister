@@ -5,12 +5,13 @@
  * train on. Trained models will be supplied when they are finished (basically a serialized Q hash map).
  */
 use indicatif::{ProgressBar, ProgressStyle};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::cmp::{max, Ordering};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::sync::{mpsc, Arc, Mutex, RwLock};
+use std::thread;
 
 pub mod data;
 
@@ -25,6 +26,8 @@ pub trait State:
     + Ord
     + Serialize
     + for<'a> Deserialize<'a>
+    + Send
+    + Sync
 {
     /// the action type associated with this state
     type A: PartialEq
@@ -37,10 +40,15 @@ pub trait State:
         + Ord
         + Serialize
         + Default
-        + for<'a> Deserialize<'a>;
+        + for<'a> Deserialize<'a>
+        + Send
+        + Sync;
 }
 
-pub trait GameSpace<S: State> {
+pub trait GameSpace<S: State>: Send + Sync {
+    /// returns a new gamespace to learn in
+    fn new_space(&self) -> Box<dyn GameSpace<S>>;
+
     /// determine the reward coupled with getting to the current state
     fn reward(&self) -> f64;
 
@@ -90,11 +98,13 @@ where
     iterations: u64,
     current_iter: u64,
     self_play: bool,
+    queue_size: usize,
+    verbose: bool,
 }
 
 impl<S> QLearner<S>
 where
-    S: State,
+    S: State + 'static,
 {
     pub fn new() -> Self {
         let q = HashMap::new();
@@ -106,7 +116,9 @@ where
             initial_value: 0.5,
             iterations: 100000,
             current_iter: 0,
-            self_play: false
+            self_play: false,
+            queue_size: 500,
+            verbose: true,
         }
     }
 
@@ -114,10 +126,26 @@ where
         self.self_play = true;
     }
 
+    pub fn disable_verbose(&mut self) {
+        self.verbose = false;
+    }
+
     pub fn new_with_iter(iter: u64) -> Self {
         let mut learner = Self::new();
-        learner.iterations = iter;
+
+        if iter > learner.queue_size as u64 {
+            learner.iterations = iter;
+        } else {
+            learner.iterations = learner.queue_size as u64;
+        }
+
         learner
+    }
+
+    fn populate_mutex(&self, mutex: &mut HashMap<S, Mutex<()>>) {
+        self.q.iter().for_each(|(state, _)| {
+            mutex.insert(*state, Mutex::new(()));
+        });
     }
 
     pub fn train(&mut self, game: &mut impl GameSpace<S>) {
@@ -128,78 +156,145 @@ where
                 .progress_chars("━━─"),
         );
 
-        loop {
-            let current_state = game.state();
+        // create a mutex hashmap that follows the Q structure
+        let mut mutex: HashMap<S, Mutex<()>> = HashMap::new();
+        self.populate_mutex(&mut mutex);
 
-            // determine a new action to take, from current state
-            let action = self.new_action(game);
+        // create the channel
+        let (tx, rx) = mpsc::channel();
 
-            if self.self_play {
-                game.take_action(&action, &Some(&self.q));
+        // keep track of the different handles
+        let mut handles = Vec::new();
+
+        // create a shared ownership Q
+        let q = Arc::new(RwLock::new(self.q.clone()));
+
+        let num_cpu = num_cpus::get();
+
+        let producers = {
+            if num_cpu < 2 {
+                1
             } else {
-                game.take_action(&action, &None)
+                num_cpu - 1
             }
+        };
 
-            // reward is the reward that's coupled with this action
-            let reward = game.reward();
-            let best_future = {
-                let best = best_action_score(&self.q, &game.state());
-                if let Ok(best) = best {
-                    best.1
-                } else {
-                    self.initial_value
+        for _ in 0..producers {
+            // clone the tranceiver
+            let local_tx = tx.clone();
+            // create a new space to learn in
+            let mut local_game = game.new_space();
+
+            let local_init = self.initial_value;
+            let local_self = self.self_play;
+
+            let q = Arc::clone(&q);
+
+            let handle = thread::spawn(move || {
+                loop {
+                    let current_state = local_game.state();
+
+                    // determine a new action to take, from current state
+                    let action = local_game.random_action();
+
+                    if local_self {
+                        local_game.take_action(&action, &Some(&q.read().unwrap()));
+                    } else {
+                        local_game.take_action(&action, &None)
+                    }
+
+                    // reward is the reward that's coupled with this action
+                    let reward = local_game.reward();
+                    let best_future = {
+                        let best = best_action_score(&q.read().unwrap(), &local_game.state());
+                        if let Ok(best) = best {
+                            best.1
+                        } else {
+                            local_init
+                        }
+                    };
+
+                    // send the values to the consumer
+                    let Ok(_) = local_tx.send((current_state, action, reward, best_future)) else {
+                        break;
+                    };
                 }
-            };
+            });
+            handles.push(handle);
+        }
 
-            // new value to assign to Q(s,a)
-            let v: f64 = {
-                // get the old value of Q(s,a) if it is available
-                let old_value = self
-                    .q
-                    .get(&current_state)
-                    .and_then(|m| m.get(&action))
-                    .unwrap_or(&self.initial_value);
+        let mut rcv_queue = Vec::new();
 
-                *old_value + self.rate * (reward + self.discount * best_future - *old_value)
-            };
+        // consumer loop
+        'outer: for rcv in rx {
+            rcv_queue.push(rcv);
 
-            self.q
-                .entry(current_state)
-                .or_insert_with(HashMap::new)
-                .insert(action, v);
+            if rcv_queue.len() == producers * self.queue_size {
+                let mut my_q = q.write().unwrap();
 
-            self.current_iter += 1;
-            pb.inc(1);
+                while let Some(rcv) = rcv_queue.pop() {
+                    let (current_state, action, reward, best_future) = rcv;
 
-            if self.current_iter >= self.iterations {
-                break;
+                    // new value to assign to Q(s,a)
+                    let v: f64 = {
+                        // get the old value of Q(s,a) if it is available
+                        let old_value = my_q
+                            .get(&current_state)
+                            .and_then(|m| m.get(&action))
+                            .unwrap_or(&self.initial_value);
+
+                        *old_value + self.rate * (reward + self.discount * best_future - *old_value)
+                    };
+
+                    my_q.entry(current_state)
+                        .or_insert_with(HashMap::new)
+                        .insert(action, v);
+
+                    self.current_iter += 1;
+
+                    if self.verbose {
+                        pb.inc(1);
+                    }
+
+                    if self.current_iter >= self.iterations {
+                        break 'outer;
+                    }
+                }
             }
         }
 
-        pb.finish();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        self.q = q.read().unwrap().clone();
+
+        if self.verbose {
+            pb.finish();
+        }
     }
 
     /// determine the action the agent takes while exploring the statespace
-    fn new_action(&mut self, game: &dyn GameSpace<S>) -> S::A {
-        let alowed = game.actions();
+    // fn new_action(&mut self, game: &dyn GameSpace<S>) -> S::A {
+    //     let alowed = game.actions();
 
-        let exploit_factor = rand::thread_rng().gen_range(0..100);
+    //     let exploit_factor = rand::thread_rng().gen_range(0..100);
 
-        let explore_factor: f64 =
-            100.0 * (self.iterations as f64 - self.current_iter as f64) / (self.iterations as f64);
+    //     let explore_factor: f64 =
+    //         100.0 * (self.iterations as f64 - self.current_iter as f64) / (self.iterations as f64);
 
-        let best = best_action_score(&self.q, &game.state());
+    //     let best = best_action_score(&self.q, &game.state());
 
-        if let Ok(best) = best {
-            if alowed.contains(&best.0) && exploit_factor > max(explore_factor as u64, 50) {
-                // EXPLOIT
-                return best.0;
-            }
-        }
+    //     if let Ok(best) = best {
+    //         if alowed.contains(&best.0) && exploit_factor > max(explore_factor as u64, 50) {
+    //             // EXPLOIT
+    //             return best.0;
+    //         }
+    //     }
 
-        // EXPLORE
-        game.random_action()
-    }
+    //     // EXPLORE
+    //     game.random_action()
+    // }
 
     pub fn get_q(&self) -> Q<S> {
         self.q.clone()
@@ -212,7 +307,7 @@ where
 
 impl<S> Default for QLearner<S>
 where
-    S: State,
+    S: State + 'static,
 {
     fn default() -> Self {
         Self::new()

@@ -29,11 +29,9 @@ fn main() {
     }
 
     loop {
-        for _ in 0..13 {
-            game.play_round(&q);
-        }
+        game.play_deal(&q);
 
-        game.new_round();
+        game.new_deal();
         game.show_scores();
 
         print!("Play another round? [Y/n]: \x1b[1m");

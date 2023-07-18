@@ -196,6 +196,7 @@ fn ask_model(new: bool) -> Option<String> {
                 Key::Char('q') => {
                     stdout.flush().unwrap();
                     write!(stdout, "{}", termion::cursor::Show).unwrap();
+                    drop(stdout);
                     exit(0);
                 }
                 _ => {}

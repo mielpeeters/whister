@@ -4,12 +4,12 @@
 //! # Example Usage
 //! You can play a whister game like this:
 //! ```no_run
-//! # use whister::game::Game;
-//! #
+//! use whister::game::Game;
+//! 
 //! let mut game = Game::new();
 //! game.add_human_players(1).unwrap();
 //!
-//! // example: three rounds
+//! // example: three deals
 //! let mut count = 3;
 //! loop {
 //!     if count == 0 {
@@ -17,13 +17,11 @@
 //!     }
 //!     count -= 1;
 //!     
-//!     for _ in 0..13 {
-//!         // None supplied for just a simple rule-based opponent
-//!         game.play_round(&None);
-//!     }
+//!     // None supplied for just a simple rule-based opponent
+//!     game.play_deal(&None);
 //!     
-//!     // start a new round
-//!     game.new_round();
+//!     // start a new deal
+//!     game.new_deal();
 //! }
 //! ```
 //!
@@ -34,15 +32,16 @@
 //!
 //! for example:
 //! ```no_run
-//! # use whister::game::Game;
+//! use whister::game::Game;
 //! use whister::fortify;
+//! 
 //! let mut game = Game::new();
 //! game.add_human_players(1).unwrap();
 //!
-//! // the model is deserialized here
-//! let q =  fortify::pickle_to_q("data/whister.pkl", false);
+//! // the model is deserialized here (example file path)
+//! let q = fortify::data::pickle_to_q("~/.local/share/whister/easy.pkl", false);
 //!
-//! // example: three rounds
+//! // example: three deals
 //! let mut count = 3;
 //! loop {
 //!     if count == 0 {
@@ -50,13 +49,11 @@
 //!     }
 //!     count -= 1;
 //!     
-//!     for _ in 0..13 {
-//!         // None supplied for just a simple rule-based opponent
-//!         game.play_round(&q);
-//!     }
+//!     // None supplied for just a simple rule-based opponent
+//!     game.play_deal(&q);
 //!     
-//!     // start a new round
-//!     game.new_round();
+//!     // start a new deal
+//!     game.new_deal();
 //! }
 //! ```
 
@@ -64,7 +61,7 @@ use crate::{
     card::Card,
     deck::{CardID, Deck},
     fortify::{self, GameSpace, Q},
-    gamestate::{Action, GameState},
+    gamestate::{Action, GameState, BidState},
     player::Player,
     show,
     suit::Suit,
@@ -97,6 +94,8 @@ pub struct Game {
     round_scores: [u32; 4],
     gone_cards: [[bool; 13]; 4],
     last_winner: usize,
+    dealer: usize,
+    bidding: bool,
 }
 
 impl Default for Game {
@@ -132,6 +131,8 @@ impl Game {
             round_scores: [0; 4],
             gone_cards: [[false; 13]; 4],
             last_winner: 0,
+            dealer: 0,
+            bidding: true,
         }
     }
 
@@ -144,7 +145,7 @@ impl Game {
         Ok(self.human_players)
     }
 
-    pub fn new_round(&mut self) {
+    pub fn new_deal(&mut self) {
         let mut deck = Deck::new_full();
         deck.shuffle();
 
@@ -413,6 +414,7 @@ impl Game {
                     Key::Char('q') => {
                         stdout.flush().unwrap();
                         write!(stdout, "{}", termion::cursor::Show).unwrap();
+                        drop(stdout);
                         exit(0);
                     }
                     _ => {
@@ -475,11 +477,11 @@ impl Game {
             if let Ok(best) = best {
                 best.0
             } else {
-                self.random_action()
+                <Self as fortify::GameSpace<GameState>>::random_action(self)
             }
         };
 
-        let alowed = self.actions();
+        let alowed = <Self as fortify::GameSpace<GameState>>::actions(self);
 
         if !alowed.iter().any(|a| *a == best_action) {
             best_action = alowed[0];
@@ -500,25 +502,42 @@ impl Game {
         self.play_easy();
     }
 
-    pub fn play_round(&mut self, q: &Option<Q<GameState>>) {
-        for _ in 0..4 {
-            if self.turn < self.human_players {
-                self.human_plays();
-                show::show_table_wait(&self.table);
-            } else {
-                if let Some(q) = q {
-                    self.ai_plays(q);
+    fn bidding(&mut self) {
+        show::dealer(self.dealer);
+
+        // TODO: implement bidding
+    }
+
+    fn play_rounds(&mut self, q: &Option<Q<GameState>>) {
+        for _ in 0..13 {
+            // play one round
+            for _ in 0..4 {
+                if self.turn < self.human_players {
+                    self.human_plays();
+                    show::show_table_wait(&self.table);
                 } else {
-                    self.rulebased_plays();
+                    if let Some(q) = q {
+                        self.ai_plays(q);
+                    } else {
+                        self.rulebased_plays();
+                    }
+                    show::show_table_wait(&self.table);
                 }
-                show::show_table_wait(&self.table);
             }
+    
+            self.trick().expect("Couldn't play trick in play_round");
+    
+            show::winner(self.turn);
+            show::wait();
         }
+    }
 
-        self.trick().expect("Couldn't play trick in play_round");
-
-        show::winner(self.turn);
-        show::wait();
+    pub fn play_deal(&mut self, q: &Option<Q<GameState>>) {
+        // bidding
+        self.bidding();
+        
+        // play the actual rounds
+        self.play_rounds(q);
     }
 
     pub fn agent_plays_round(&mut self, card: CardID, q: &Option<&Q<GameState>>) {
@@ -544,7 +563,7 @@ impl Game {
 
         // start a new round if necessary
         if self.tricks.len() == 13 {
-            self.new_round();
+            self.new_deal();
         }
 
         // let first opponents put their cards down, until player 0 is up
@@ -614,7 +633,7 @@ impl Game {
                 .highest_card_of(player, &playable)
                 .unwrap_or(playable[0]),
             Action::ComeBest => {
-                let state = self.state();
+                let state: GameState = self.state();
                 let suit = state.has_highest.iter().position_max().unwrap();
                 let suit_ids = self.of_which_suit(player, &playable, suit);
 
@@ -626,6 +645,10 @@ impl Game {
 }
 
 impl GameSpace<GameState> for Game {
+    fn new_space(&self) -> Box<dyn GameSpace<GameState>> {
+        Box::new(Self::new())
+    }
+    
     fn reward(&self) -> f64 {
         if self.last_winner == 0 {
             1.0
@@ -642,7 +665,7 @@ impl GameSpace<GameState> for Game {
         let playable = self.alowed_cards();
         let better = self.better_cards_of(player, &playable);
 
-        let state = self.state();
+        let state: GameState = self.state();
         let first: bool = state.first_suit == -1;
 
         alowed.push(Action::PlayWorst);
@@ -723,6 +746,34 @@ impl GameSpace<GameState> for Game {
     fn take_action(&mut self, action: &Action, q: &Option<&Q<GameState>>) {
         let card_id = self.action_card_id(action);
         self.agent_plays_round(card_id, q);
+    }
+}
+
+/// WIP
+impl GameSpace<BidState> for Game {
+    fn reward(&self) -> f64 {
+        if self.bidding {
+            0.0
+        } else {
+            // play the game to see whether or not this AI won
+            todo!()
+        }
+    }
+
+    fn actions(&self) -> Vec<<BidState as fortify::State>::A> {
+        todo!()
+    }
+
+    fn state(&self) -> BidState {
+        todo!()
+    }
+
+    fn take_action(&mut self, action: &<BidState as fortify::State>::A, q: &Option<&Q<BidState>>) {
+        todo!()
+    }
+
+    fn new_space(&self) -> Box<dyn GameSpace<BidState>> {
+        todo!()
     }
 }
 
