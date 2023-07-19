@@ -455,6 +455,21 @@ impl Game {
         self.players[self.turn].show_cards();
     }
 
+    fn alowed_or_why_not(&self, card: CardID) -> Result<(), String> {
+        let player = &self.players[self.turn];
+
+        if self.table.size() != 0 && player.can_follow(self.table.card(0).suit) {
+            let first_suit = self.table.card(0).suit;
+            if player.card(card).suit != first_suit {
+                return Err(format!("You are able to follow in {}, but are trying not to", first_suit))
+            } else {
+                return Ok(())
+            }
+        }   
+
+        Ok(())
+    }
+
     fn human_plays(&mut self) {
         // showing what the game looks like atm
         self.show_player_state();
@@ -462,18 +477,15 @@ impl Game {
 
         // ask what card to play and check validity
         let card_id: CardID = {
-            let playable = self.alowed_cards();
-
             loop {
                 // loop until correct card given
                 self.ask_card();
 
                 let i = self.players[self.turn].selected_id();
 
-                if playable.contains(&i) {
-                    break i;
-                } else {
-                    println!("You can't play that card right now, try again!");
+                match self.alowed_or_why_not(i) {
+                    Ok(_) => break i,
+                    Err(err) => println!("{}", err),
                 }
             }
         };
