@@ -760,7 +760,6 @@ impl GameSpace<GameState> for Game {
             have_trump,
             nb_cards,
             nb_out_of,
-            // nb_out_of: [0; 4],
         }
     }
 
