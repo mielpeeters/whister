@@ -187,6 +187,7 @@ where
 
             let local_init = self.initial_value;
             let local_self = self.self_play;
+            let local_disc = self.discount;
 
             let q = Arc::clone(&q);
 
@@ -215,7 +216,7 @@ where
                     };
 
                     // send the values to the consumer
-                    let Ok(_) = local_tx.send((current_state, action, reward, best_future)) else {
+                    let Ok(_) = local_tx.send((current_state, action, reward + local_disc * best_future)) else {
                         break;
                     };
                 }
@@ -233,7 +234,7 @@ where
                 let mut my_q = q.write().unwrap();
 
                 while let Some(rcv) = rcv_queue.pop() {
-                    let (current_state, action, reward, best_future) = rcv;
+                    let (current_state, action, new) = rcv;
 
                     // new value to assign to Q(s,a)
                     let v: f64 = {
@@ -243,7 +244,7 @@ where
                             .and_then(|m| m.get(&action))
                             .unwrap_or(&self.initial_value);
 
-                        *old_value + self.rate * (reward + self.discount * best_future - *old_value)
+                        *old_value + self.rate * (new - *old_value)
                     };
 
                     my_q.entry(current_state)
