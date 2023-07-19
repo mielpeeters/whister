@@ -179,15 +179,15 @@ where
             }
         };
 
+        let local_init = self.initial_value;
+        let local_self = self.self_play;
+        let local_disc = self.discount;
+
         for _ in 0..producers {
             // clone the tranceiver
             let local_tx = tx.clone();
             // create a new space to learn in
             let mut local_game = game.new_space();
-
-            let local_init = self.initial_value;
-            let local_self = self.self_play;
-            let local_disc = self.discount;
 
             let q = Arc::clone(&q);
 
@@ -233,6 +233,7 @@ where
             if rcv_queue.len() == producers * self.queue_size {
                 let mut my_q = q.write().unwrap();
 
+                // consume the entire queue
                 while let Some(rcv) = rcv_queue.pop() {
                     let (current_state, action, new) = rcv;
 
