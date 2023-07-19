@@ -483,7 +483,7 @@ impl Game {
     }
 
     pub fn best_card_id_ai(&self, q: &Q<GameState>) -> usize {
-        let mut best_action = {
+        let best_action = {
             let best = fortify::best_action_score(q, &self.state());
             if let Ok(best) = best {
                 best.0
@@ -491,12 +491,6 @@ impl Game {
                 <Self as fortify::GameSpace<GameState>>::random_action(self)
             }
         };
-
-        let alowed = <Self as fortify::GameSpace<GameState>>::actions(self);
-
-        if !alowed.iter().any(|a| *a == best_action) {
-            best_action = alowed[0];
-        }
 
         self.action_card_id(&best_action)
     }
@@ -615,6 +609,8 @@ impl Game {
         println!("Gone Cards:\n{:?}", self.gone_cards);
     }
 
+    /// returns the ID of the card that corresponds with this action
+    /// note: this only returns playable card IDs!
     pub fn action_card_id(&self, action: &Action) -> CardID {
         let player = self.turn;
 
@@ -626,30 +622,30 @@ impl Game {
                 .unwrap_or(playable[0]),
             Action::RaiseLow => {
                 let better = self.better_cards_of(player, &playable);
-                self.lowest_card_of(player, &better).unwrap_or(playable[0])
+                self.lowest_card_of(player, &better).unwrap_or_else(|| playable[0])
             }
             Action::RaiseHigh => {
                 let better = self.better_cards_of(player, &playable);
-                self.highest_card_of(player, &better).unwrap_or(playable[0])
+                self.highest_card_of(player, &better).unwrap_or_else(|| playable[0])
             }
             Action::TrumpHigh => {
                 let trumps = self.of_which_suit(player, &playable, 3);
-                self.highest_card_of(player, &trumps).unwrap_or(playable[0])
+                self.highest_card_of(player, &trumps).unwrap_or_else(|| playable[0])
             }
             Action::TrumpLow => {
                 let trumps = self.of_which_suit(player, &playable, 3);
-                self.lowest_card_of(player, &trumps).unwrap_or(playable[0])
+                self.lowest_card_of(player, &trumps).unwrap_or_else(|| playable[0])
             }
             Action::PlayBest => self
                 .highest_card_of(player, &playable)
-                .unwrap_or(playable[0]),
+                .unwrap_or_else(|| playable[0]),
             Action::ComeBest => {
                 let state: GameState = self.state();
                 let suit = state.has_highest.iter().position_max().unwrap();
                 let suit_ids = self.of_which_suit(player, &playable, suit);
 
                 self.highest_card_of(player, &suit_ids)
-                    .unwrap_or(playable[0])
+                    .unwrap_or_else(|| playable[0])
             }
         }
     }
@@ -669,15 +665,13 @@ impl GameSpace<GameState> for Game {
     }
 
     fn actions(&self) -> Vec<Action> {
-        let mut alowed: Vec<Action> = Vec::new();
-
+        let mut alowed: Vec<Action> = Vec::with_capacity(5);
         let player = self.turn;
-
         let playable = self.alowed_cards();
         let better = self.better_cards_of(player, &playable);
-
         let state: GameState = self.state();
         let first: bool = state.first_suit == -1;
+        let can_follow: bool = self.can_follow(player);
 
         alowed.push(Action::PlayWorst);
 
@@ -686,15 +680,13 @@ impl GameSpace<GameState> for Game {
         }
 
         if self.players[player].can_follow(Suit::Hearts)
-            && (first || !self.can_follow(player) || state.first_suit == 3)
+            && (first || !can_follow || state.first_suit == 3)
         {
-            alowed.push(Action::TrumpHigh);
-            alowed.push(Action::TrumpLow);
+            alowed.extend([Action::TrumpHigh, Action::TrumpLow]);
         }
 
-        if self.can_follow(player) && !better.is_empty() && !first {
-            alowed.push(Action::RaiseLow);
-            alowed.push(Action::RaiseHigh);
+        if can_follow && !better.is_empty() && !first {
+            alowed.extend([Action::RaiseLow, Action::RaiseHigh]);
         }
 
         alowed

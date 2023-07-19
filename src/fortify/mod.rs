@@ -76,12 +76,12 @@ pub fn best_action_score<S: State>(q: &Q<S>, state: &S) -> Result<(S::A, f64), S
     let entry = q.get(state);
 
     if let Some(entry) = entry {
-        let result = entry
+        if let Some((max_key, max_value)) = entry
             .iter()
-            .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Equal));
-        let result = result.unwrap();
-
-        return Ok((*result.0, *result.1));
+            .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Equal))
+        {
+            return Ok((*max_key, *max_value));
+        }
     }
 
     Err("There was no entry for this state.".to_string())
@@ -273,7 +273,10 @@ where
 
         if self.verbose {
             pb.finish();
-            println!("\x1b[3m{} states\x1b[0m have been discovered", self.q.keys().len());
+            println!(
+                "\x1b[3m{} states\x1b[0m have been discovered",
+                self.q.keys().len()
+            );
             println!();
         }
     }
