@@ -2,7 +2,8 @@ use text_io::read;
 use whister::{
     fortify::{self, QLearner},
     game::Game,
-    gamestate::GameState, show,
+    gamestate::GameState,
+    show,
 };
 
 fn main() {
@@ -56,10 +57,9 @@ fn main() {
     print!("\x1b[0m");
     if let Some(answer) = answer {
         if answer == "N" || answer == "n" || answer.is_empty() {
-            return
+            return;
         }
         println!("Saving model as \x1b[3m{:?}\x1b[0m", answer);
-        fortify::data::q_to_pickle(&q, answer, false).expect("Should be able to save");
-    } 
-
+        fortify::data::q_to_bin(&q, answer, false).expect("Should be able to save");
+    }
 }

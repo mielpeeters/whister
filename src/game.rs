@@ -5,7 +5,7 @@
 //! You can play a whister game like this:
 //! ```no_run
 //! use whister::game::Game;
-//! 
+//!
 //! let mut game = Game::new();
 //! game.add_human_players(1).unwrap();
 //!
@@ -26,7 +26,7 @@
 //! ```
 //!
 //! # Playing against a trained AI model
-//! For this, you need to use a `.pkl` file, a serialized fortify::Q object.
+//! For this, you need to use a `.bin` file, a serialized fortify::Q object.
 //! These are supplied on the github in the `data/` directory,
 //! or can be trained using the `fortify` module.
 //!
@@ -34,12 +34,12 @@
 //! ```no_run
 //! use whister::game::Game;
 //! use whister::fortify;
-//! 
+//!
 //! let mut game = Game::new();
 //! game.add_human_players(1).unwrap();
 //!
 //! // the model is deserialized here (example file path)
-//! let q = fortify::data::pickle_to_q("~/.local/share/whister/easy.pkl", false);
+//! let q = fortify::data::bin_to_q("~/.local/share/whister/easy.bin", false);
 //!
 //! // example: three deals
 //! let mut count = 3;
@@ -208,7 +208,6 @@ impl Game {
                     self.nb_cant_follow[card.suit as usize] = 0;
                 }
                 self.gone_cards[card.suit as usize][(card.score() - 2) as usize] = true;
-
             });
 
             self.tricks.push(new_trick);
@@ -382,7 +381,13 @@ impl Game {
         println!();
         println!("Summarized:");
         println!("- Ace > King > ... > 2");
-        println!("- hearts {} > {{{}, {}, {}}}", Suit::Hearts, Suit::Clubs, Suit::Diamonds, Suit::Spades);
+        println!(
+            "- hearts {} > {{{}, {}, {}}}",
+            Suit::Hearts,
+            Suit::Clubs,
+            Suit::Diamonds,
+            Suit::Spades
+        );
         println!();
 
         show::wait_q();
@@ -461,11 +466,14 @@ impl Game {
         if self.table.size() != 0 && player.can_follow(self.table.card(0).suit) {
             let first_suit = self.table.card(0).suit;
             if player.card(card).suit != first_suit {
-                return Err(format!("You are able to follow in {}, but are trying not to", first_suit))
+                return Err(format!(
+                    "You are able to follow in {}, but are trying not to",
+                    first_suit
+                ));
             } else {
-                return Ok(())
+                return Ok(());
             }
-        }   
+        }
 
         Ok(())
     }
@@ -541,9 +549,9 @@ impl Game {
                     show::show_table_wait(&self.table);
                 }
             }
-    
+
             self.trick().expect("Couldn't play trick in play_round");
-    
+
             show::winner(self.turn);
             show::wait();
         }
@@ -552,7 +560,7 @@ impl Game {
     pub fn play_deal(&mut self, q: &Option<Q<GameState>>) {
         // bidding
         self.bidding();
-        
+
         // play the actual rounds
         self.play_rounds(q);
     }
@@ -634,19 +642,23 @@ impl Game {
                 .unwrap_or(playable[0]),
             Action::RaiseLow => {
                 let better = self.better_cards_of(player, &playable);
-                self.lowest_card_of(player, &better).unwrap_or_else(|| playable[0])
+                self.lowest_card_of(player, &better)
+                    .unwrap_or_else(|| playable[0])
             }
             Action::RaiseHigh => {
                 let better = self.better_cards_of(player, &playable);
-                self.highest_card_of(player, &better).unwrap_or_else(|| playable[0])
+                self.highest_card_of(player, &better)
+                    .unwrap_or_else(|| playable[0])
             }
             Action::TrumpHigh => {
                 let trumps = self.of_which_suit(player, &playable, 3);
-                self.highest_card_of(player, &trumps).unwrap_or_else(|| playable[0])
+                self.highest_card_of(player, &trumps)
+                    .unwrap_or_else(|| playable[0])
             }
             Action::TrumpLow => {
                 let trumps = self.of_which_suit(player, &playable, 3);
-                self.lowest_card_of(player, &trumps).unwrap_or_else(|| playable[0])
+                self.lowest_card_of(player, &trumps)
+                    .unwrap_or_else(|| playable[0])
             }
             Action::PlayBest => self
                 .highest_card_of(player, &playable)
@@ -667,7 +679,7 @@ impl GameSpace<GameState> for Game {
     fn new_space(&self) -> Box<dyn GameSpace<GameState>> {
         Box::new(Self::new())
     }
-    
+
     fn reward(&self) -> f64 {
         if self.last_winner == 0 {
             1.0
@@ -749,11 +761,11 @@ impl GameSpace<GameState> for Game {
         }
 
         // compress the four 8bit numbers to four concatenated 2 bit numbers
-        // saves 30% on serialized model size!! 
+        // saves 30% on serialized model size!!
         let mut nb_out_of: u8 = 0b00000000;
         self.nb_cant_follow.iter().enumerate().for_each(|(i, nb)| {
             // bitwise or with shifted nb
-            nb_out_of |= *nb << (2*i);
+            nb_out_of |= *nb << (2 * i);
         });
 
         GameState {
