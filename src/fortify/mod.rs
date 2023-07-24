@@ -50,7 +50,7 @@ pub trait GameSpace<S: State>: Send + Sync {
     fn new_space(&self) -> Box<dyn GameSpace<S>>;
 
     /// determine the reward coupled with getting to the current state
-    fn reward(&self) -> f64;
+    fn reward(&mut self) -> f64;
 
     /// alowed actions from the current state
     fn actions(&self) -> Vec<S::A>;

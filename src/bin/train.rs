@@ -59,7 +59,7 @@ fn main() {
             return
         }
         println!("Saving model as \x1b[3m{:?}\x1b[0m", answer);
-        fortify::data::q_to_pickle(&q, answer, false).expect("Should be able to save");
+        fortify::data::save_model(&q, answer, false).expect("Should be able to save");
     } 
 
 }

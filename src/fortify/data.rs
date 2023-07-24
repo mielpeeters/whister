@@ -104,7 +104,7 @@ fn get_data(file_name: &str) -> Option<Vec<u8>> {
     Some(serialized)
 }
 
-pub fn q_to_pickle<S: State>(q: &Q<S>, name: String, reduced: bool) -> std::io::Result<()> {
+pub fn save_model<S: State>(q: &Q<S>, name: String, reduced: bool) -> std::io::Result<()> {
     let serialized = match reduced {
         true => {
             let optimal = q_to_optimal(q);
@@ -116,7 +116,7 @@ pub fn q_to_pickle<S: State>(q: &Q<S>, name: String, reduced: bool) -> std::io::
     save_data(name.as_str(), serialized.as_slice())
 }
 
-pub fn pickle_to_q<S: State>(name: &str, reduced: bool) -> Option<Q<S>> {
+pub fn get_model<S: State>(name: &str, reduced: bool) -> Option<Q<S>> {
     let Some(serialized) = get_data(name) else {
         return None
     };
@@ -226,5 +226,5 @@ fn ask_model(new: bool) -> Option<String> {
 pub fn select_model<S: State>(new: bool) -> Option<Q<S>> {
     let model = ask_model(new)?;
 
-    pickle_to_q(model.as_str(), false)
+    get_model(model.as_str(), false)
 }

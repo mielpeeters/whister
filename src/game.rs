@@ -96,6 +96,8 @@ pub struct Game {
     last_winner: usize,
     dealer: usize,
     bidding: bool,
+    model_name: String,
+    goal: [u8; 4]
 }
 
 impl Default for Game {
@@ -133,6 +135,8 @@ impl Game {
             last_winner: 0,
             dealer: 0,
             bidding: true,
+            model_name: "".to_string(),
+            goal: [0; 4],
         }
     }
 
@@ -505,19 +509,41 @@ impl Game {
     fn bidding(&mut self) {
         show::dealer(self.dealer);
 
-        // TODO: implement bidding
+        let mut done = false;
+
+        // TODO: bidding process...
+        while !done {
+            done = true;
+        }
     }
 
+    /// if self.model_name is not set to an empty String, that model name will be used
     fn play_rounds(&mut self, q: &Option<Q<GameState>>) {
+        // create a new variable to make sure that the lifetime of the import model is satisfied
+        let import_q = {
+            if !self.model_name.is_empty() {
+                fortify::data::get_model::<GameState>(&self.model_name, false)
+            } else {
+                None
+            }
+        };
+
+        let use_q = {
+            if import_q.is_some() {
+                &import_q
+            } else {
+                q
+            }
+        };
+
         for _ in 0..13 {
-            // play one round
             for _ in 0..4 {
                 if self.turn < self.human_players {
                     self.human_plays();
                     show::show_table_wait(&self.table);
                 } else {
-                    if let Some(q) = q {
-                        self.ai_plays(q);
+                    if let Some(use_q) = use_q {
+                        self.ai_plays(use_q);
                     } else {
                         self.rulebased_plays();
                     }
@@ -649,7 +675,7 @@ impl GameSpace<GameState> for Game {
         Box::new(Self::new())
     }
     
-    fn reward(&self) -> f64 {
+    fn reward(&mut self) -> f64 {
         if self.last_winner == 0 {
             1.0
         } else {
@@ -751,12 +777,20 @@ impl GameSpace<GameState> for Game {
 
 /// WIP
 impl GameSpace<BidState> for Game {
-    fn reward(&self) -> f64 {
+    fn reward(&mut self) -> f64 {
         if self.bidding {
             0.0
         } else {
             // play the game to see whether or not this AI won
-            todo!()
+            self.model_name = "advanced".to_string();
+            self.play_rounds(&None);
+            
+            // give a reward if the round score of the ai was higher than their desired amount 
+            if self.round_scores[0] >= self.goal[0].into() {
+                1.0
+            } else {
+                0.0
+            }
         }
     }
 
@@ -768,7 +802,7 @@ impl GameSpace<BidState> for Game {
         todo!()
     }
 
-    fn take_action(&mut self, action: &<BidState as fortify::State>::A, q: &Option<&Q<BidState>>) {
+    fn take_action(&mut self, _action: &<BidState as fortify::State>::A, _q: &Option<&Q<BidState>>) {
         todo!()
     }
 
