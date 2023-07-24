@@ -6,6 +6,9 @@ use std::{
     process::exit,
 };
 use termion::{event::Key, input::TermRead, raw::IntoRawMode};
+use flate2::write::ZlibEncoder;
+use flate2::read::ZlibDecoder;
+use flate2::Compression;
 
 use crate::show;
 
@@ -113,7 +116,11 @@ pub fn q_to_bin<S: State>(q: &Q<S>, name: String, reduced: bool) -> std::io::Res
         false => bincode::serialize(q).expect("Should serialize unreduced Q"),
     };
 
-    save_data(name.as_str(), serialized.as_slice())
+    // TODO: writing directly to a file would reduce memory consumption
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
+    encoder.write_all(&serialized).unwrap();
+
+    save_data(name.as_str(), encoder.finish().unwrap().as_slice())
 }
 
 pub fn bin_to_q<S: State>(name: &str, reduced: bool) -> Option<Q<S>> {
@@ -121,12 +128,17 @@ pub fn bin_to_q<S: State>(name: &str, reduced: bool) -> Option<Q<S>> {
         return None
     };
 
+    let mut decoder = ZlibDecoder::new(serialized.as_slice());
+    let mut uncompressed: Vec<u8> = Vec::with_capacity(serialized.len());
+
+    decoder.read_to_end(&mut uncompressed).unwrap();
+
     if reduced {
-        let deserialized: HashMap<S, S::A> = bincode::deserialize(&serialized).expect("Should deserialize reduced Q");
+        let deserialized: HashMap<S, S::A> = bincode::deserialize(&uncompressed).expect("Should deserialize reduced Q");
 
         Some(optimal_to_q(deserialized))
     } else {
-        let deserialized: Q<S> = bincode::deserialize(&serialized).expect("Should deserialize unreduced Q");
+        let deserialized: Q<S> = bincode::deserialize(&uncompressed).expect("Should deserialize unreduced Q");
         Some(deserialized)
     }
 }
