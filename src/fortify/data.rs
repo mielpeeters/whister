@@ -74,18 +74,17 @@ fn list_data() -> Vec<String> {
     models
 }
 
-fn save_data(file_name: &str, data: &[u8]) -> std::io::Result<()> {
-    let mut data_dir = get_data_dir().expect("Should get data directory");
+fn get_save_file(file_name: &str) -> Result<std::fs::File, ()> {
+    let mut data_dir = get_data_dir()?;
 
     // create the file path
     data_dir.push(format!("{}.bin", file_name));
 
     // create the file
-    let mut file = File::create(data_dir)?;
+    let file = File::create(data_dir).map_err(|_| ())?;
 
-    // write the model to the file
-    file.write_all(data).unwrap();
-    Ok(())
+    // return file
+    Ok(file)
 }
 
 fn get_data(file_name: &str) -> Option<Vec<u8>> {
@@ -116,11 +115,11 @@ pub fn q_to_bin<S: State>(q: &Q<S>, name: String, reduced: bool) -> std::io::Res
         false => bincode::serialize(q).expect("Should serialize unreduced Q"),
     };
 
-    // TODO: writing directly to a file would reduce memory consumption
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
+    let mut encoder = ZlibEncoder::new(get_save_file(name.as_str()).expect("Should get save file"), Compression::best());
     encoder.write_all(&serialized).unwrap();
 
-    save_data(name.as_str(), encoder.finish().unwrap().as_slice())
+    encoder.finish().unwrap();
+    Ok(())
 }
 
 pub fn bin_to_q<S: State>(name: &str, reduced: bool) -> Option<Q<S>> {
