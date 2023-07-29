@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     fs::{self, File},
     io::{stdin, stdout, BufReader, Read, Write},
-    process::exit,
+    process::exit, path::PathBuf,
 };
 use termion::{event::Key, input::TermRead, raw::IntoRawMode};
 use flate2::write::ZlibEncoder;
@@ -74,26 +74,28 @@ fn list_data() -> Vec<String> {
     models
 }
 
+fn model_name_to_path(model_name: &str) -> PathBuf {
+    let mut data_dit = get_data_dir().unwrap();
+
+    data_dit.push(format!("{}.bin", model_name));
+
+    println!("{:?}", data_dit);
+    data_dit
+}
+
 fn get_save_file(file_name: &str) -> Result<std::fs::File, ()> {
-    let mut data_dir = get_data_dir()?;
-
-    // create the file path
-    data_dir.push(format!("{}.bin", file_name));
-
+    let file = model_name_to_path(file_name);
     // create the file
-    let file = File::create(data_dir).map_err(|_| ())?;
+    let file = File::create(file).map_err(|_| ())?;
 
     // return file
     Ok(file)
 }
 
 fn get_data(file_name: &str) -> Option<Vec<u8>> {
-    let mut data_dir = get_data_dir().expect("Should get data directory");
+    let file = model_name_to_path(file_name);
 
-    // create the file path
-    data_dir.push(format!("{}.bin", file_name));
-
-    let file = match File::open(data_dir) {
+    let file = match File::open(file) {
         Ok(it) => it,
         Err(_) => return None,
     };
@@ -167,7 +169,7 @@ fn show_selected_model(models: &Vec<String>, selected: usize, new: bool) {
 }
 
 fn ask_model(new: bool) -> Option<String> {
-    let models = list_data();
+    let mut models = list_data();
 
     let stdin = stdin();
     let mut stdout = stdout().into_raw_mode().unwrap();
@@ -208,6 +210,18 @@ fn ask_model(new: bool) -> Option<String> {
                     write!(stdout, "{}", termion::cursor::Show).unwrap();
                     drop(stdout);
                     exit(0);
+                }
+                Key::Char('d') => {
+                    if new {
+                        stdout.suspend_raw_mode().unwrap();
+                        print!("Are you sure you want to delete {}? [y/N]: ", models[selected]);
+                        let answer = show::yes_or_no(false);
+                        if answer {
+                            fs::remove_file(model_name_to_path(&models[selected].clone())).unwrap();
+                            models = list_data();
+                        }
+                        stdout.activate_raw_mode().unwrap();
+                    }
                 }
                 _ => {}
             }

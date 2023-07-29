@@ -47,7 +47,6 @@ impl Deck {
             ..Default::default()
         };
         deck.set_suit_amounts();
-
         deck
     }
 

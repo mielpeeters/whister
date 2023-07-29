@@ -120,7 +120,7 @@ impl Game {
 
         let players = [player_one, player_two, player_three, player_four];
         let scores = [0, 0, 0, 0];
-
+        
         Game {
             tricks,
             table,
@@ -142,7 +142,7 @@ impl Game {
         if self.human_players + amount > 4 {
             return Err("Cannot have more than 4 players to this game...".to_string());
         }
-
+        
         self.human_players += amount;
         Ok(self.human_players)
     }
@@ -150,7 +150,7 @@ impl Game {
     pub fn new_deal(&mut self) {
         let mut deck = Deck::new_full();
         deck.shuffle();
-
+        
         let tricks: Vec<Deck> = Vec::new();
         self.tricks = tricks;
 

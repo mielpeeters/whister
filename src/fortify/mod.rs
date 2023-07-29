@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::{mpsc, Arc, Mutex, RwLock};
+use std::sync::{mpsc, Arc, RwLock};
 use std::thread;
 
 pub mod data;
@@ -142,12 +142,6 @@ where
         learner
     }
 
-    fn populate_mutex(&self, mutex: &mut HashMap<S, Mutex<()>>) {
-        self.q.iter().for_each(|(state, _)| {
-            mutex.insert(*state, Mutex::new(()));
-        });
-    }
-
     pub fn train(&mut self, game: &mut impl GameSpace<S>) {
         let pb = ProgressBar::new(self.iterations);
         pb.set_style(
@@ -155,10 +149,6 @@ where
                 .unwrap()
                 .progress_chars("━━─"),
         );
-
-        // create a mutex hashmap that follows the Q structure
-        let mut mutex: HashMap<S, Mutex<()>> = HashMap::new();
-        self.populate_mutex(&mut mutex);
 
         // create the channel
         let (tx, rx) = mpsc::channel();
