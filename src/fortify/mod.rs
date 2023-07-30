@@ -30,8 +30,7 @@ pub trait State:
     + Sync
 {
     /// the action type associated with this state
-    type A: 
-        PartialEq
+    type A: PartialEq
         + Eq
         + Hash
         + Clone
@@ -166,6 +165,8 @@ where
             if num_cpu < 2 {
                 1
             } else {
+                // use all but one of the available cpus
+                // the last one should be kept free for the consumer
                 num_cpu - 1
             }
         };
