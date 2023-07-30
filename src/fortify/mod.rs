@@ -30,7 +30,8 @@ pub trait State:
     + Sync
 {
     /// the action type associated with this state
-    type A: PartialEq
+    type A: 
+        PartialEq
         + Eq
         + Hash
         + Clone
