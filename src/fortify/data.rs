@@ -1,14 +1,15 @@
 use dirs::data_dir;
+use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
 use std::{
     collections::HashMap,
     fs::{self, File},
     io::{stdin, stdout, BufReader, Read, Write},
-    process::exit, path::PathBuf,
+    path::PathBuf,
+    process::exit,
 };
 use termion::{event::Key, input::TermRead, raw::IntoRawMode};
-use flate2::write::ZlibEncoder;
-use flate2::read::ZlibDecoder;
-use flate2::Compression;
 
 use crate::show;
 
@@ -79,7 +80,6 @@ fn model_name_to_path(model_name: &str) -> PathBuf {
 
     data_dit.push(format!("{}.bin", model_name));
 
-    println!("{:?}", data_dit);
     data_dit
 }
 
@@ -117,7 +117,10 @@ pub fn q_to_bin<S: State>(q: &Q<S>, name: String, reduced: bool) -> std::io::Res
         false => bincode::serialize(q).expect("Should serialize unreduced Q"),
     };
 
-    let mut encoder = ZlibEncoder::new(get_save_file(name.as_str()).expect("Should get save file"), Compression::best());
+    let mut encoder = ZlibEncoder::new(
+        get_save_file(name.as_str()).expect("Should get save file"),
+        Compression::best(),
+    );
     encoder.write_all(&serialized).unwrap();
 
     encoder.finish().unwrap();
@@ -135,11 +138,13 @@ pub fn bin_to_q<S: State>(name: &str, reduced: bool) -> Option<Q<S>> {
     decoder.read_to_end(&mut uncompressed).unwrap();
 
     if reduced {
-        let deserialized: HashMap<S, S::A> = bincode::deserialize(&uncompressed).expect("Should deserialize reduced Q");
+        let deserialized: HashMap<S, S::A> =
+            bincode::deserialize(&uncompressed).expect("Should deserialize reduced Q");
 
         Some(optimal_to_q(deserialized))
     } else {
-        let deserialized: Q<S> = bincode::deserialize(&uncompressed).expect("Should deserialize unreduced Q");
+        let deserialized: Q<S> =
+            bincode::deserialize(&uncompressed).expect("Should deserialize unreduced Q");
         Some(deserialized)
     }
 }
@@ -214,7 +219,10 @@ fn ask_model(new: bool) -> Option<String> {
                 Key::Char('d') => {
                     if new {
                         stdout.suspend_raw_mode().unwrap();
-                        print!("Are you sure you want to delete {}? [y/N]: ", models[selected]);
+                        print!(
+                            "Are you sure you want to delete {}? [y/N]: ",
+                            models[selected]
+                        );
                         let answer = show::yes_or_no(false);
                         if answer {
                             fs::remove_file(model_name_to_path(&models[selected].clone())).unwrap();

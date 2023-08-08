@@ -273,28 +273,6 @@ where
         }
     }
 
-    /// determine the action the agent takes while exploring the statespace
-    // fn new_action(&mut self, game: &dyn GameSpace<S>) -> S::A {
-    //     let alowed = game.actions();
-
-    //     let exploit_factor = rand::thread_rng().gen_range(0..100);
-
-    //     let explore_factor: f64 =
-    //         100.0 * (self.iterations as f64 - self.current_iter as f64) / (self.iterations as f64);
-
-    //     let best = best_action_score(&self.q, &game.state());
-
-    //     if let Ok(best) = best {
-    //         if alowed.contains(&best.0) && exploit_factor > max(explore_factor as u64, 50) {
-    //             // EXPLOIT
-    //             return best.0;
-    //         }
-    //     }
-
-    //     // EXPLORE
-    //     game.random_action()
-    // }
-
     pub fn get_q(&self) -> Q<S> {
         self.q.clone()
     }

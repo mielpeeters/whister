@@ -36,7 +36,7 @@ impl Deck {
             cards,
             selected: usize::MAX,
             suit_amounts: [13, 13, 13, 13],
-            curr: 0,
+              curr: 0,
         }
     }
 
