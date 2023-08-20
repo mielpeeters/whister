@@ -2,7 +2,7 @@
  * Pack of cards, not necessarily a full deck. Lots of functionality.
  */
 
-use crate::{card::Card, suit::Suit, player::Player};
+use crate::{card::Card, player::Player, suit::Suit};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use std::{cmp::min, fmt};
@@ -15,6 +15,35 @@ pub struct Deck {
     selected: CardID,
     suit_amounts: [usize; 4],
     curr: usize,
+}
+
+fn pad(input: &str, pad: char, width: usize) -> String {
+    let mut output = input.to_string();
+    if output.chars().count() >= width {
+        return output;
+    }
+    let padding = &(0..(width - output.chars().count()))
+        .map(|_| pad)
+        .collect::<String>();
+    output.push_str(padding);
+    output
+}
+
+fn dist(player: usize, first: usize) -> usize {
+    let ans = if player >= first {
+        player - first
+    } else {
+        player + 4 - first
+    };
+
+    // println!("distance between {first} and {player} = {ans}");
+    ans
+}
+
+fn has_played(player: usize, first: usize, cards: usize) -> bool {
+    let dist = dist(player, first);
+
+    dist < cards
 }
 
 impl Deck {
@@ -36,7 +65,7 @@ impl Deck {
             cards,
             selected: usize::MAX,
             suit_amounts: [13, 13, 13, 13],
-              curr: 0,
+            curr: 0,
         }
     }
 
@@ -216,7 +245,8 @@ impl Deck {
             .iter()
             .enumerate()
             .min_by(|(_, me), (_, other)| self.card(**me).higher(self.card(**other), trump))
-            .map(|(_, card_id)| card_id).copied()
+            .map(|(_, card_id)| card_id)
+            .copied()
     }
 
     pub fn highest(&self, available: &[CardID], trump: &Suit) -> Option<CardID> {
@@ -224,7 +254,8 @@ impl Deck {
             .iter()
             .enumerate()
             .max_by(|(_, one), (_, two)| self.card(**one).higher(self.card(**two), trump))
-            .map(|(_, card_id)| card_id).copied()
+            .map(|(_, card_id)| card_id)
+            .copied()
     }
 
     pub fn winning(&self, available: &[CardID], trump: &Suit) -> Option<CardID> {
@@ -232,7 +263,8 @@ impl Deck {
             .iter()
             .enumerate()
             .max_by(|(_, one), (_, two)| self.card(**one).winning(self.card(**two), trump))
-            .map(|(_, card_id)| card_id).copied()
+            .map(|(_, card_id)| card_id)
+            .copied()
     }
 
     fn set_suit_amounts(&mut self) {
@@ -286,6 +318,49 @@ impl Deck {
 
         self.selected = selected + coord.1;
     }
+
+    pub fn show_as_table(&self, me: usize, first: usize, winner: usize) {
+        for player in 0..4 {
+            // print 15 characters wide + 2 padding per player
+            if player == winner {
+                print!("\x1b[92m");
+            }
+
+            if me == player {
+                print!("╭╴{}╮", pad("You╶", '─', 9));
+            } else {
+                print!("╭╴{}╮", pad(&format!("Player {player}╶"), '─', 9));
+            }
+
+            print!(" \x1b[0m");
+        }
+
+        println!();
+
+        for player in 0..4 {
+            if player == winner {
+                print!("\x1b[92m");
+            }
+
+            print!("╰───");
+
+            if has_played(player, first, self.cards.len()) {
+                print!("╴{}", self.cards[dist(player, first)]);
+                if player == winner {
+                    print!("\x1b[92m╶");
+                } else {
+                    print!("╶");
+                }
+            } else {
+                print!("────");
+            }
+
+            print!("───╯ \x1b[0m");
+        }
+
+        println!();
+        println!()
+    }
 }
 
 impl Player for Deck {
@@ -295,35 +370,35 @@ impl Player for Deck {
         pulled.sort();
         Deck::new_from(pulled.cards)
     }
-    
+
     /// show the cards this player is holding, by first sorting them!
     fn show_cards(&mut self) {
         self.show_sort();
     }
-    
+
     /// look at a random card of this player's deck
     fn random_card(&self) -> &Card {
         self.peek()
     }
-    
+
     /// Does this player have any cards left?
     fn has_cards(&self) -> bool {
         !self.is_empty()
     }
-    
+
     /// Does this player have any cards of this suit?
     fn can_follow(&self, suit: Suit) -> bool {
         self.has_suit(&suit)
     }
-    
+
     fn card(&self, card: CardID) -> &Card {
         self.card(card)
     }
-    
+
     fn selected_card(&self) -> &Card {
         self.selected()
     }
-    
+
     fn selected_id(&self) -> CardID {
         self.selected_id()
     }
@@ -563,7 +638,5 @@ mod tests {
     }
 
     #[test]
-    fn can_follow() {
-
-    }
+    fn can_follow() {}
 }

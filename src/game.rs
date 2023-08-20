@@ -1,67 +1,69 @@
-//!
-//! This module defines a game of colour whist, which consists of tricks and the current table
-//!
-//! # Example Usage
-//! You can play a whister game like this:
-//! ```no_run
-//! use whister::game::Game;
-//!
-//! let mut game = Game::new();
-//! game.add_human_players(1).unwrap();
-//!
-//! // example: three deals
-//! let mut count = 3;
-//! loop {
-//!     if count == 0 {
-//!         break;
-//!     }
-//!     count -= 1;
-//!     
-//!     // None supplied for just a simple rule-based opponent
-//!     game.play_deal(&None);
-//!     
-//!     // start a new deal
-//!     game.new_deal();
-//! }
-//! ```
-//!
-//! # Playing against a trained AI model
-//! For this, you need to use a `.bin` file, a serialized fortify::Q object.
-//! These are supplied on the github in the `data/` directory,
-//! or can be trained using the `fortify` module.
-//!
-//! for example:
-//! ```no_run
-//! use whister::game::Game;
-//! use whister::fortify;
-//!
-//! let mut game = Game::new();
-//! game.add_human_players(1).unwrap();
-//!
-//! // the model is deserialized here (example file path)
-//! let q = fortify::data::bin_to_q("~/.local/share/whister/easy.bin", false);
-//!
-//! // example: three deals
-//! let mut count = 3;
-//! loop {
-//!     if count == 0 {
-//!         break;
-//!     }
-//!     count -= 1;
-//!     
-//!     // None supplied for just a simple rule-based opponent
-//!     game.play_deal(&q);
-//!     
-//!     // start a new deal
-//!     game.new_deal();
-//! }
-//! ```
+/*!
+
+This module defines a game of colour whist, which consists of tricks and the current table
+
+# Example Usage
+You can play a whister game like this:
+```no_run
+use whister::game::Game;
+
+let mut game = Game::new();
+game.add_human_players(1).unwrap();
+
+// example: three deals
+let mut count = 3;
+loop {
+    if count == 0 {
+        break;
+    }
+    count -= 1;
+
+    // None supplied for just a simple rule-based opponent
+    game.play_deal(&None);
+
+    // start a new deal
+    game.new_deal();
+}
+```
+
+# Playing against a trained AI model
+For this, you need to use a `.bin` file, a serialized fortify::Q object.
+These are supplied on the github in the `data/` directory,
+or can be trained using the `fortify` module.
+
+for example:
+```no_run
+use whister::game::Game;
+use whister::fortify;
+
+let mut game = Game::new();
+game.add_human_players(1).unwrap();
+
+// the model is deserialized here (example file path)
+let q = fortify::data::bin_to_q("~/.local/share/whister/easy.bin", false);
+
+// example: three deals
+let mut count = 3;
+loop {
+    if count == 0 {
+        break;
+    }
+    count -= 1;
+
+    // None supplied for just a simple rule-based opponent
+    game.play_deal(&q);
+
+    // start a new deal
+    game.new_deal();
+}
+```
+*/
 
 use crate::{
     card::Card,
     deck::{CardID, Deck},
     fortify::{self, GameSpace, Q},
-    gamestate::{Action, GameState},
+    gamestate::{Action, BidState, GameState},
     player::Player,
     show,
     suit::Suit,
@@ -94,6 +96,7 @@ pub struct Game {
     round_scores: [u32; 4],
     gone_cards: [[bool; 13]; 4],
     last_winner: usize,
+    last_last_winner: usize,
     dealer: usize,
     bidding: bool,
     nb_cant_follow: [u8; 4],
@@ -132,6 +135,7 @@ impl Game {
             round_scores: [0; 4],
             gone_cards: [[false; 13]; 4],
             last_winner: 0,
+            last_last_winner: 0,
             dealer: 0,
             bidding: true,
             nb_cant_follow: [0; 4],
@@ -186,6 +190,7 @@ impl Game {
         if self.table.size() == 4 {
             // determine winning player, set turn to them
             self.turn = (self.winner() + self.last_winner) % 4;
+            self.last_last_winner = self.last_winner;
             self.last_winner = self.turn;
 
             // add 1 to the winner's score
@@ -233,11 +238,11 @@ impl Game {
     }
 
     pub fn show_table(&self) {
-        self.table.show();
+        show::show_table(&self.table, 0, self.last_winner);
     }
 
     pub fn show_table_wait(&self) {
-        show::show_table_wait(&self.table);
+        show::show_table_wait(&self.table, 0, self.last_winner);
     }
 
     pub fn player_plays(&mut self, card: usize) -> Result<(), String> {
@@ -454,8 +459,8 @@ impl Game {
     }
 
     pub fn show_player_state(&mut self) {
-        show::show_table(&self.table);
-        show::show_last_non_empty(&self.tricks);
+        show::show_table(&self.table, self.turn, self.last_winner);
+        show::show_last_non_empty(&self.tricks, self.last_last_winner, self.last_winner);
         println!("Your hand: [Player {}]", self.turn);
         self.players[self.turn].show_cards();
     }
@@ -539,14 +544,14 @@ impl Game {
             for _ in 0..4 {
                 if self.turn < self.human_players {
                     self.human_plays();
-                    show::show_table_wait(&self.table);
+                    self.show_table_wait();
                 } else {
                     if let Some(q) = q {
                         self.ai_plays(q);
                     } else {
                         self.rulebased_plays();
                     }
-                    show::show_table_wait(&self.table);
+                    self.show_table_wait();
                 }
             }
 
@@ -637,9 +642,14 @@ impl Game {
         let playable = self.alowed_cards();
 
         match action {
-            Action::PlayWorst => self
-                .lowest_card_of(player, &playable)
-                .unwrap_or(playable[0]),
+            Action::PlayWorst(suit) => {
+                let mut suit_cards = self.of_which_suit(player, &playable, *suit as usize);
+                if suit_cards.is_empty() {
+                    suit_cards = playable.clone();
+                }
+                self.lowest_card_of(player, &suit_cards)
+                    .unwrap_or(playable[0])
+            }
             Action::RaiseLow => {
                 let better = self.better_cards_of(player, &playable);
                 self.lowest_card_of(player, &better)
@@ -660,9 +670,14 @@ impl Game {
                 self.lowest_card_of(player, &trumps)
                     .unwrap_or_else(|| playable[0])
             }
-            Action::PlayBest => self
-                .highest_card_of(player, &playable)
-                .unwrap_or_else(|| playable[0]),
+            Action::PlayBest(suit) => {
+                let mut suit_cards = self.of_which_suit(player, &playable, *suit as usize);
+                if suit_cards.is_empty() {
+                    suit_cards = playable.clone();
+                }
+                self.highest_card_of(player, &suit_cards)
+                    .unwrap_or_else(|| playable[0])
+            }
             Action::ComeBest => {
                 let state: GameState = self.state();
                 let suit = state.has_highest.iter().position_max().unwrap();
@@ -697,7 +712,9 @@ impl GameSpace<GameState> for Game {
         let first: bool = state.first_suit == -1;
         let can_follow: bool = self.can_follow(player);
 
-        alowed.push(Action::PlayWorst);
+        for suit in Suit::iterator() {
+            alowed.push(Action::PlayWorst(*suit))
+        }
 
         if first && state.has_highest.iter().any(|h| *h) {
             alowed.push(Action::ComeBest);
@@ -785,33 +802,38 @@ impl GameSpace<GameState> for Game {
     }
 }
 
-/// WIP
-// impl GameSpace<BidState> for Game {
-//     fn reward(&self) -> f64 {
-//         if self.bidding {
-//             0.0
-//         } else {
-//             // play the game to see whether or not this AI won
-//             todo!()
-//         }
-//     }
+/// TODO: implement this boy
+impl GameSpace<BidState> for Game {
+    fn reward(&self) -> f64 {
+        // only give a reward after the full bidding process
+        if self.bidding {
+            0.0
+        } else {
+            // TODO: play the game to see whether or not this AI won
+            todo!()
+        }
+    }
 
-//     fn actions(&self) -> Vec<<BidState as fortify::State>::A> {
-//         todo!()
-//     }
+    fn actions(&self) -> Vec<<BidState as fortify::State>::A> {
+        unimplemented!()
+    }
 
-//     fn state(&self) -> BidState {
-//         todo!()
-//     }
+    fn state(&self) -> BidState {
+        unimplemented!()
+    }
 
-//     fn take_action(&mut self, action: &<BidState as fortify::State>::A, q: &Option<&Q<BidState>>) {
-//         todo!()
-//     }
+    fn take_action(
+        &mut self,
+        _action: &<BidState as fortify::State>::A,
+        _q: &Option<&Q<BidState>>,
+    ) {
+        unimplemented!()
+    }
 
-//     fn new_space(&self) -> Box<dyn GameSpace<BidState>> {
-//         todo!()
-//     }
-// }
+    fn new_space(&self) -> Box<dyn GameSpace<BidState>> {
+        unimplemented!()
+    }
+}
 
 #[cfg(test)]
 mod tests {

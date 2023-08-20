@@ -27,13 +27,10 @@ pub struct GameState {
 /// All possible actions that the agent can take.
 /// Technically, the action could be described as just a Card, but
 /// these are realistic moves for many scenarios, to reduce the state-action space.
-#[derive(
-    Hash, PartialEq, Eq, Debug, PartialOrd, Ord, Serialize, Deserialize, Copy, Clone, Default,
-)]
+#[derive(Hash, PartialEq, Eq, Debug, PartialOrd, Ord, Serialize, Deserialize, Copy, Clone)]
 pub enum Action {
-    #[default]
     /// play the lowest card you can
-    PlayWorst,
+    PlayWorst(Suit),
     /// play a higher card, but the lowest you can
     RaiseLow,
     /// play a higher card, the highest you can
@@ -43,9 +40,15 @@ pub enum Action {
     /// play the lowest trump card that buys it
     TrumpLow,
     /// play a card you know is the best one
-    PlayBest,
-    /// come out with a card you know is the best
+    PlayBest(Suit),
+    /// come with a card you know is the best one
     ComeBest,
+}
+
+impl Default for Action {
+    fn default() -> Self {
+        Self::PlayWorst(Suit::Clubs)
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord, Serialize, Deserialize)]
@@ -126,31 +129,16 @@ impl Bid {
 
 impl PartialOrd for Bid {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let value_comp = self.value().cmp(&other.value());
-        if value_comp == std::cmp::Ordering::Equal {
-            if let Bid::Accept(s1, _) = self {
-                if let Bid::Accept(s2, _) = other {
-                    Some(s1.cmp(s2))
-                } else {
-                    None
-                }
-            } else if let Bid::Solo(s1, _) = self {
-                if let Bid::Solo(s2, _) = other {
-                    Some(s1.cmp(s2))
-                } else {
-                    None
-                }
-            } else if let Bid::Abondance(s1, _) = self {
-                if let Bid::Abondance(s2, _) = other {
-                    Some(s1.cmp(s2))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            Some(value_comp)
+        match self.value().cmp(&other.value()) {
+            // If the bids are equal in score, they are separated in suit!
+            std::cmp::Ordering::Equal => match (self, other) {
+                (Bid::Accept(s1, _), Bid::Accept(s2, _)) => Some(s1.cmp(s2)),
+                (Bid::Solo(s1, _), Bid::Solo(s2, _)) => Some(s1.cmp(s2)),
+                (Bid::Abondance(s1, _), Bid::Abondance(s2, _)) => Some(s1.cmp(s2)),
+                _ => None,
+            },
+            // If bids are not equal in score, just return their ordering
+            other => Some(other),
         }
     }
 }
@@ -160,4 +148,3 @@ impl Ord for Bid {
         self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
     }
 }
- 

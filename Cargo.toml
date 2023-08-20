@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Miel Peeters"]
 description = "AI toolkit for playing colour whist."
+default-run = "whister"
 
 [dependencies]
 rand = "0.8.5"
@@ -16,4 +17,3 @@ dirs = "5.0.1"
 num_cpus = "1.16.0"
 bincode = "1.3.3"
 flate2 = "1.0.26"
-

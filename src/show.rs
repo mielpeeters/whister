@@ -2,18 +2,25 @@
  * This module implements some functions for showing the game state to the player.
  */
 
-use std::{thread, time::Duration, io::{stdin, stdout, Write, self}};
+use std::{
+    io::{self, stdin, stdout, Write},
+    thread,
+    time::Duration,
+};
 
-use termion::{raw::IntoRawMode, input::TermRead, event::Key};
+use termion::{event::Key, input::TermRead, raw::IntoRawMode};
 
 use crate::deck::Deck;
 
 macro_rules! print_player {
-    ($x:expr) => {   
-        print!("{}", match $x {
-            0 => "\x1b[1;92mYou!".to_string(),
-            _ => format!("\x1b[1;91mPlayer {}", $x),
-        });
+    ($x:expr) => {
+        print!(
+            "{}",
+            match $x {
+                0 => "\x1b[1;92mYou!".to_string(),
+                _ => format!("\x1b[1;91mPlayer {}", $x),
+            }
+        );
         clear_fmt();
     };
 }
@@ -26,15 +33,15 @@ fn clear_fmt() {
     print!("\x1b[0m");
 }
 
-pub fn show_table_wait(table: &Deck) {
+pub fn show_table_wait(table: &Deck, player: usize, first: usize) {
     clear();
-    println!("Current table: \n{}\n", table);
+    table.show_as_table(player, first, 5);
     thread::sleep(Duration::from_millis(500));
 }
 
-pub fn show_table(table: &Deck) {
+pub fn show_table(table: &Deck, player: usize, first: usize) {
     clear();
-    println!("Current table: \n{}\n", table);
+    table.show_as_table(player, first, 5);
 }
 
 pub fn dealer(dealer: usize) {
@@ -48,9 +55,10 @@ pub fn wait() {
     thread::sleep(Duration::from_millis(500));
 }
 
-pub fn show_last_non_empty(deck: &Vec<Deck>) {
-    if !deck.is_empty() {
-        println!("Played trick:\n{}\n",deck[deck.len()-1]);
+pub fn show_last_non_empty(deck: &Vec<Deck>, first: usize, winner: usize) {
+    if let Some(last) = deck.last() {
+        println!("Played trick:");
+        last.show_as_table(0, first, winner);
     }
 }
 
@@ -115,11 +123,11 @@ pub fn wait_enter() {
 }
 
 /// returns `true` if user entered y, otherwise false
-/// 
+///
 /// `default` is returned when neither y or n is entered
 pub fn yes_or_no(default: bool) -> bool {
     io::stdout().flush().unwrap();
-    
+
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
         Ok(n) => {
@@ -143,11 +151,11 @@ fn without_return(input: &str) -> String {
 }
 
 /// returns `true` if user entered y, otherwise false
-/// 
+///
 /// `default` is returned when neither y or n is entered
 pub fn get_answer() -> Option<String> {
     io::stdout().flush().unwrap();
-    
+
     let mut input = String::new();
     match io::stdin().read_line(&mut input) {
         Ok(n) => {
