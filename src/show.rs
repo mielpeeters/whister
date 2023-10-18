@@ -55,7 +55,7 @@ pub fn wait() {
     thread::sleep(Duration::from_millis(500));
 }
 
-pub fn show_last_non_empty(deck: &Vec<Deck>, first: usize, winner: usize) {
+pub fn show_last_non_empty(deck: &[Deck], first: usize, winner: usize) {
     if let Some(last) = deck.last() {
         println!("Played trick:");
         last.show_as_table(0, first, winner);

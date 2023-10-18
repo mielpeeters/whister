@@ -37,7 +37,9 @@ assert!(order == Ordering::Greater);
 let order = seven_of_spades.higher(&king_of_clubs, &Suit::Hearts);
 assert!(order == Ordering::Less);
 ```
+self.
 */
+
 #[derive(Eq, Clone, PartialEq, Hash, Debug)]
 pub struct Card {
     pub suit: Suit,
@@ -110,7 +112,7 @@ impl fmt::Display for Card {
             "11" => "J".to_string(),
             "12" => "Q".to_string(),
             "13" => "K".to_string(),
-            &_ => nb,
+            _ => nb,
         };
 
         write!(f, "\x1b[47;30m{}{}", nb, self.suit)
@@ -123,6 +125,18 @@ impl Default for Card {
             suit: Suit::Hearts,
             number: 1,
         }
+    }
+}
+
+impl Into<i32> for Card {
+    fn into(self) -> i32 {
+        self.score() as i32
+    }
+}
+
+impl Into<i16> for Card {
+    fn into(self) -> i16 {
+        self.score() as i16
     }
 }
 

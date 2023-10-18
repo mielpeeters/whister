@@ -614,6 +614,10 @@ impl Game {
         println!("The scores: {:?}", self.scores);
     }
 
+    pub fn get_ai_score(&self) -> u32 {
+        self.scores[0]
+    }
+
     pub fn can_follow(&self, player: PlayerID) -> bool {
         if self.table.is_empty() {
             return true;

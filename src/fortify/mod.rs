@@ -1,9 +1,30 @@
 /*!
- * This module implements approximate Q-learning for the whister card game.
- *
- * Multiple difficulty levels are defined, by giving the agent increasing amounts of data to
- * train on. Trained models will be supplied when they are finished (basically a serialized Q hash map).
- */
+This module implements approximate Q-learning for the whister card game.
+
+Usage:
+```no_run
+use whister::{
+    fortify::{self, QLearner},
+    game::Game,
+    gamestate::GameState
+    };
+
+let mut learner: QLearner<GameState>;
+
+// set the amount of iterations to a million
+learner = QLearner::new_with_iter(1000000);
+
+// you need to explicitely enable self-play
+learner.enable_self_play();
+
+learner.train(&mut Game::new());
+
+let q = learner.get_q();
+
+println!("resulting q values: {q:?}");
+```
+*/
+
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -92,13 +113,13 @@ where
     S: State,
 {
     q: Q<S>,
-    rate: f64,
-    discount: f64,
-    initial_value: f64,
+    pub rate: f64,
+    pub discount: f64,
+    pub initial_value: f64,
     iterations: u64,
     current_iter: u64,
     self_play: bool,
-    queue_size: usize,
+    pub queue_size: usize,
     verbose: bool,
 }
 
@@ -112,8 +133,8 @@ where
         QLearner {
             q,
             rate: 0.05,
-            discount: 0.8,
-            initial_value: 0.5,
+            discount: 0.2,
+            initial_value: 0.8,
             iterations: 100000,
             current_iter: 0,
             self_play: false,
@@ -142,6 +163,9 @@ where
         learner
     }
 
+    /// Train an agent in the given gamespace.
+    /// The gamespace (`game` parameter) is only an example, other spaces will be instantiated in
+    /// the multithreaded training process
     pub fn train(&mut self, game: &mut impl GameSpace<S>) {
         let pb = ProgressBar::new(self.iterations);
         pb.set_style(
@@ -208,7 +232,9 @@ where
                     };
 
                     // send the values to the consumer
-                    let Ok(_) = local_tx.send((current_state, action, reward + local_disc * best_future)) else {
+                    let Ok(_) =
+                        local_tx.send((current_state, action, reward + local_disc * best_future))
+                    else {
                         break;
                     };
                 }

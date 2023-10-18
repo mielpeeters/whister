@@ -30,14 +30,11 @@ fn pad(input: &str, pad: char, width: usize) -> String {
 }
 
 fn dist(player: usize, first: usize) -> usize {
-    let ans = if player >= first {
+    if player >= first {
         player - first
     } else {
         player + 4 - first
-    };
-
-    // println!("distance between {first} and {player} = {ans}");
-    ans
+    }
 }
 
 fn has_played(player: usize, first: usize, cards: usize) -> bool {
