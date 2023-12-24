@@ -128,9 +128,7 @@ pub fn q_to_bin<S: State>(q: &Q<S>, name: String, reduced: bool) -> std::io::Res
 }
 
 pub fn bin_to_q<S: State>(name: &str, reduced: bool) -> Option<Q<S>> {
-    let Some(serialized) = get_data(name) else {
-        return None
-    };
+    let serialized = get_data(name)?;
 
     let mut decoder = ZlibDecoder::new(serialized.as_slice());
     let mut uncompressed: Vec<u8> = Vec::with_capacity(serialized.len());

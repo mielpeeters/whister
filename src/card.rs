@@ -37,7 +37,6 @@ assert!(order == Ordering::Greater);
 let order = seven_of_spades.higher(&king_of_clubs, &Suit::Hearts);
 assert!(order == Ordering::Less);
 ```
-self.
 */
 
 #[derive(Eq, Clone, PartialEq, Hash, Debug)]
